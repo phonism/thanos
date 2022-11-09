@@ -82,7 +82,7 @@ class EWiseDiv(TensorOp):
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         lhs, rhs = node.inputs
-        return out_grad / rhs, -out_grad * lhs / (rhs * rhs)
+        return out_grad / rhs, -out_grad * lhs / rhs / rhs
 
 
 def divide(a, b):
@@ -113,11 +113,34 @@ class PowScalar(TensorOp):
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         hs, = node.inputs
-        return self.scalar * out_grad * array_api(hs, self.scalar - 1)
+        return self.scalar * out_grad * pow_scalar(hs, self.scalar - 1)
 
 
 def pow_scalar(a, scalar):
     return PowScalar(scalar)(a)
+
+class Log(TensorOp):
+    def compute(self, a):
+        return array_api.log(a)
+
+    def gradient(self, out_grad: Tensor, node: Tensor):
+        hs, = node.inputs
+        return out_grad / hs
+
+def log(a):
+    return Log()(a)
+
+
+class Exp(TensorOp):
+    def compute(self, a):
+        return array_api.exp(a)
+
+    def gradient(self, out_grad: Tensor, node: Tensor):
+        hs, = node.inputs
+        return out_grad * exp(hs)
+
+def exp(a):
+    return Exp()(a)
 
 
 class Transpose(TensorOp):
@@ -132,7 +155,7 @@ class Transpose(TensorOp):
     def gradient(self, out_grad: Tensor, node: Tensor):
         if self.axes is None:
             return transpose(out_grad, (-1, -2))
-        return transpose(a, self.axes[0], self.axes[1])
+        return transpose(out_grad, (self.axes[0], self.axes[1]))
 
 
 def transpose(a, axes=None):
@@ -153,3 +176,97 @@ class Reshape(TensorOp):
 def reshape(a, shape):
     return Reshape(shape)(a)
 
+
+class BroadcastTo(TensorOp):
+    """
+    In order to broadcast, the size of the trailing axes for both arrays in an operation must either be the same size or one of them must be one.
+    """
+    def __init__(self, shape: tuple):
+        self.shape = shape
+
+    def compute(self, a):
+        return array_api.broadcast_to(a, self.shape)
+
+    def gradient(self, out_grad: Tensor, node: Tensor):
+        hs, = node.inputs
+        input_shape = list(hs.shape)
+        base_shape = [1] * (len(self.shape) - len(input_shape)) + input_shape
+        axes = []
+        for i in range(len(input_shape)):
+            if base_shape[i] != self.shape[i]:
+                axes.append(i)
+        out_grad = summation(out_grad, axes=tuple(axes))
+        return reshape(out_grad, input_shape)
+
+
+def broadcast_to(a, shape):
+    return BroadcastTo(shape)(a)
+
+
+class Summation(TensorOp):
+    def __init__(self, axes: Optional[tuple] = None):
+        self.axes = axes
+        if isinstance(self.axes, int):
+            self.axes = (self.axes,)
+
+    def compute(self, a):
+        return array_api.sum(a, self.axes)
+
+    def gradient(self, out_grad: Tensor, node: Tensor):
+        hs, = node.inputs
+        if self.axes is None:
+            axes = hs.shape
+        else:
+            axes = self.axes
+
+        grad_shape = list(out_grad.shape)
+        new_axes = []
+        for x in axes:
+            if x >= 0:
+                new_axes.append(x)
+            else:
+                new_axes.append(x + len(hs.shape))
+        for x in sorted(new_axes):
+            grad_shape.insert(x, 1)
+        return broadcast_to(reshape(out_grad, grad_shape), hs.shape)
+
+def summation(a, axes):
+    return Summation(axes)(a)
+
+
+
+class Matmul(TensorOp):
+    def compute(self, a, b):
+        return array_api.matmul(a, b)
+
+    def gradient(self, out_grad: Tensor, node: Tensor):
+        lhs, rhs = node.inputs
+        lhs_grad = matmul(out_grad, transpose(rhs, (-1, -2)))
+        rhs_grad = matmul(transpose(lhs, (-1, -2)), out_grad)
+
+        dim1 = len(lhs.shape)
+        dim2 = len(rhs.shape)
+        dim3 = len(out_grad.shape)
+
+        # 如果输出的shape比输入高，说明在前面做了broadcast，那么就要把这些broadcase给sum起来
+        if dim3 > dim1:
+            lhs_grad = summation(lhs_grad, tuple(range(dim3 - dim1)))
+        if dim3 > dim2:
+            rhs_grad = summation(rhs_grad, tuple(range(dim3 - dim2)))
+        return lhs_grad, rhs_grad
+
+def matmul(a, b):
+    return Matmul()(a, b)
+
+
+class ReLU(TensorOp):
+    def compute(self, a):
+        return array_api.maximum(a, 0)
+
+    def gradient(self, out_grad: Tensor, node: Tensor):
+        hs, = node.inputs
+        input_relu = relu(hs).numpy()
+        return out_grad * Tensor(input_relu > 0)
+
+def relu(a):
+    return ReLU()(a)

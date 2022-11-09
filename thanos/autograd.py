@@ -10,6 +10,49 @@ class Device:
     nothing
     """
 
+class CPUDevice(Device):
+    """Represents data that sits in CPU"""
+
+    def __repr__(self):
+        return "thanos.cpu()"
+
+    def __hash__(self):
+        return self.__repr__().__hash__()
+
+    def __eq__(self, other):
+        return isinstance(other, CPUDevice)
+
+    def enabled(self):
+        return True
+
+    def zeros(self, *shape, dtype="float32"):
+        return numpy.zeros(shape, dtype=dtype)
+
+    def ones(self, *shape, dtype="float32"):
+        return numpy.ones(shape, dtype=dtype)
+
+    def randn(self, *shape):
+        # note: numpy doesn't support types within standard random routines, and
+        # .astype("float32") does work if we're generating a singleton
+        return numpy.random.randn(*shape)
+
+    def rand(self, *shape):
+        # note: numpy doesn't support types within standard random routines, and
+        # .astype("float32") does work if we're generating a singleton
+        return numpy.random.rand(*shape)
+
+    def one_hot(self, n, i, dtype="float32"):
+        return numpy.eye(n, dtype=dtype)[i]
+
+
+def cpu():
+    """Return cpu device"""
+    return CPUDevice()
+
+
+def all_devices():
+    """return a list of all available devices"""
+    return [cpu()]
 
 
 class Op:
@@ -21,7 +64,7 @@ class Op:
 
     def compute(self, *args: Tuple[NDArray]) -> NDArray:
         """Calculate forward pass of operator.
-        
+
         Parameters
         ----------
         input: NDArray
@@ -37,7 +80,7 @@ class Op:
 
     def gradient(self, out_grad: "Value", node: "Value") -> Union["Value", Tuple["Value"]]:
         """Compute partial adjoint for each input value for a given output adjoint.
-        
+
         Parameters
         ----------
         out_grad: Value
@@ -108,12 +151,12 @@ class Value:
         return self.op is None
 
     def _init(
-            self, 
-            op: Optional[Op], 
-            inputs: List["Tensor"], 
-            *, 
-            num_outputs: int = 1, 
-            cached_data: List[object] = None, 
+            self,
+            op: Optional[Op],
+            inputs: List["Tensor"],
+            *,
+            num_outputs: int = 1,
+            cached_data: List[object] = None,
             requires_grad: Optional[bool] = None):
         if requires_grad is None:
             # check the inputs op requires grad
@@ -176,6 +219,7 @@ class Tensor(Value):
             else:
                 cached_data = Tensor._array_from_numpy(array.numpy(), device=device, dtype=dtype)
         else:
+            device = device if device else cpu()
             cached_data = Tensor._array_from_numpy(array, device=device, dtype=dtype)
 
         self._init(None, [], cached_data=cached_data, requires_grad=requires_grad)
@@ -185,7 +229,6 @@ class Tensor(Value):
         if array_api is numpy:
             return numpy.array(numpy_array, dtype=dtype)
         return array_api.array(numpy_array, device=device, dtype=dtype)
-    
 
     @staticmethod
     def make_from_op(op: Op, inputs: List["Value"]):
@@ -236,12 +279,20 @@ class Tensor(Value):
     def dtype(self):
         return self.realize_cached_data().dtype
 
+    @property
+    def device(self):
+        data = self.realize_cached_data()
+        # numpy array always sits on cpu
+        if array_api is numpy:
+            return cpu()
+        return data.device
+
     def __repr__(self):
         return "Id:" + str(id(self)) + " Tensor(" + str(self.realize_cached_data()) + ")"
 
     def __str__(self):
         return str(self.realize_cached_data())
-    
+
     def numpy(self):
         data = self.realize_cached_data()
         if array_api is numpy:
@@ -281,14 +332,30 @@ class Tensor(Value):
     def __neg__(self):
         return thanos.ops.Negate()(self)
 
+    def log(self):
+        return thanos.ops.Log()(self)
+
+    def exp(self):
+        return thanos.ops.Exp()(self)
+
     def transpose(self, axes=None):
         return thanos.ops.Transpose(axes)(self)
 
     def reshape(self, shape):
         return thanos.ops.Reshape(shape)(self)
 
+    def summation(self, axes=None):
+        return thanos.ops.Summation(axes)(self)
+
     def sum(self, axes=None):
         return thanos.ops.Summation(axes)(self)
+
+    def broadcast_to(self, shape):
+        return thanos.ops.BroadcastTo(shape)(self)
+
+    def matmul(self, other):
+        return thanos.ops.Matmul()(self, other)
+
 
     __radd__ = __add__
     __rsub__ = __sub__
