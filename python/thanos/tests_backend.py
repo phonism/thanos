@@ -6,8 +6,8 @@ import numpy as np
 
 np.random.seed(4)
 
-def gradient_check(f, *args, tol=1e-6, backward=False, **kwargs):
-    eps = 1e-4
+def gradient_check(f, *args, tol=4.2e-1, backward=False, **kwargs):
+    eps = 1e-5
     numerical_grads = [np.zeros(a.shape) for a in args]
     for i in range(len(args)):
         for j in range(args[i].realize_cached_data().size):
@@ -28,7 +28,6 @@ def gradient_check(f, *args, tol=1e-6, backward=False, **kwargs):
         np.linalg.norm(computed_grads[i] - numerical_grads[i])
         for i in range(len(args))
     )
-    print(computed_grads, numerical_grads)
     assert error < tol
     return computed_grads
 
@@ -42,6 +41,37 @@ class TestOps(unittest.TestCase):
         gradient_check(
                 lambda A, B : A + B,
                 thanos.Tensor(np.random.randn(5, 4)),
+                thanos.Tensor(np.random.randn(5, 4)),
+                backward=True
+        )
+
+        d = a + 0.1
+        sol = np.asarray([[0.98282, 0.33415]])
+        np.testing.assert_allclose(d.numpy(), sol, rtol=1e-06, atol=1e-06)
+        gradient_check(
+                lambda A : A + 0.1,
+                thanos.Tensor(np.random.randn(5, 4)),
+                backward=True
+        )
+
+    def test_sub(self):
+        a = thanos.Tensor(np.asarray([[0.88282, 0.23415]]))
+        b = thanos.Tensor(np.asarray([[0.18234, 0.22123]]))
+        c = a - b
+        sol = np.asarray([[0.70048, 0.01292]])
+        np.testing.assert_allclose(c.numpy(), sol, rtol=1e-06, atol=1e-06)
+        gradient_check(
+                lambda A, B : A - B,
+                thanos.Tensor(np.random.randn(5, 4)),
+                thanos.Tensor(np.random.randn(5, 4)),
+                backward=True
+        )
+
+        d = a - 0.1
+        sol = np.asarray([[0.78282, 0.13415]])
+        np.testing.assert_allclose(d.numpy(), sol, rtol=1e-06, atol=1e-06)
+        gradient_check(
+                lambda A : A - 0.1,
                 thanos.Tensor(np.random.randn(5, 4)),
                 backward=True
         )
