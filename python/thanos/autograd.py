@@ -2,57 +2,11 @@ import thanos
 from typing import List, Optional, NamedTuple, Tuple, Union
 
 import numpy
-import numpy as array_api
-NDArray = numpy.ndarray
+from thanos import init
+#import numpy as array_api
+#NDArray = numpy.ndarray
+from .backend_selection import Device, array_api, NDArray, default_device
 
-class Device:
-    """
-    nothing
-    """
-
-class CPUDevice(Device):
-    """Represents data that sits in CPU"""
-
-    def __repr__(self):
-        return "thanos.cpu()"
-
-    def __hash__(self):
-        return self.__repr__().__hash__()
-
-    def __eq__(self, other):
-        return isinstance(other, CPUDevice)
-
-    def enabled(self):
-        return True
-
-    def zeros(self, *shape, dtype="float32"):
-        return numpy.zeros(shape, dtype=dtype)
-
-    def ones(self, *shape, dtype="float32"):
-        return numpy.ones(shape, dtype=dtype)
-
-    def randn(self, *shape):
-        # note: numpy doesn't support types within standard random routines, and
-        # .astype("float32") does work if we're generating a singleton
-        return numpy.random.randn(*shape)
-
-    def rand(self, *shape):
-        # note: numpy doesn't support types within standard random routines, and
-        # .astype("float32") does work if we're generating a singleton
-        return numpy.random.rand(*shape)
-
-    def one_hot(self, n, i, dtype="float32"):
-        return numpy.eye(n, dtype=dtype)[i]
-
-
-def cpu():
-    """Return cpu device"""
-    return CPUDevice()
-
-
-def all_devices():
-    """return a list of all available devices"""
-    return [cpu()]
 
 
 class Op:
@@ -219,7 +173,7 @@ class Tensor(Value):
             else:
                 cached_data = Tensor._array_from_numpy(array.numpy(), device=device, dtype=dtype)
         else:
-            device = device if device else cpu()
+            device = device if device else default_device()
             cached_data = Tensor._array_from_numpy(array, device=device, dtype=dtype)
 
         self._init(None, [], cached_data=cached_data, requires_grad=requires_grad)
@@ -263,8 +217,7 @@ class Tensor(Value):
         self.cached_data = value.realize_cached_data()
 
     def backward(self, out_grad=None):
-        if not out_grad:
-            out_grad = Tensor(numpy.ones(self.shape, dtype=self.dtype), dtype=self.dtype)
+        out_grad = out_grad if out_grad else init.ones(*self.shape, dtype=self.dtype, device=self.device)
         compute_gradient_of_variables(self, out_grad)
 
     def detach(self):
@@ -284,7 +237,7 @@ class Tensor(Value):
         data = self.realize_cached_data()
         # numpy array always sits on cpu
         if array_api is numpy:
-            return cpu()
+            return default_device()
         return data.device
 
     def __repr__(self):

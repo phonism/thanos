@@ -7,7 +7,8 @@ from .autograd import TensorOp, NDArray, Tensor
 
 # NOTE: we will numpy as the array_api
 # to backup our computations, this line will change in later homeworks
-import numpy as array_api
+#import numpy as array_api
+from .backend_selection import array_api, NDArray
 
 class EWiseAdd(TensorOp):
     def compute(self, a: NDArray, b: NDArray):
@@ -78,7 +79,7 @@ def mul_scalar(a, scalar):
 
 class EWiseDiv(TensorOp):
     def compute(self, a: NDArray, b: NDArray):
-        return a / b
+        return array_api.divide(a, b, dtype=a.dtype)
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         lhs, rhs = node.inputs
@@ -94,7 +95,7 @@ class DivScalar(TensorOp):
         self.scalar = scalar
 
     def compute(self, a: NDArray):
-        return a / self.scalar
+        return array_api.divide(a, self.scalar, dtype=a.dtype)
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         return out_grad / self.scalar
@@ -179,7 +180,8 @@ def reshape(a, shape):
 
 class BroadcastTo(TensorOp):
     """
-    In order to broadcast, the size of the trailing axes for both arrays in an operation must either be the same size or one of them must be one.
+    In order to broadcast, the size of the trailing axes for both arrays 
+    in an operation must either be the same size or one of them must be one.
     """
     def __init__(self, shape: tuple):
         self.shape = shape
@@ -210,7 +212,7 @@ class Summation(TensorOp):
             self.axes = (self.axes,)
 
     def compute(self, a):
-        return array_api.sum(a, self.axes)
+        return array_api.sum(a, self.axes, keepdims=False)
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         hs, = node.inputs
@@ -218,7 +220,6 @@ class Summation(TensorOp):
             axes = hs.shape
         else:
             axes = self.axes
-
         grad_shape = list(out_grad.shape)
         new_axes = []
         for x in axes:
@@ -230,9 +231,8 @@ class Summation(TensorOp):
             grad_shape.insert(x, 1)
         return broadcast_to(reshape(out_grad, grad_shape), hs.shape)
 
-def summation(a, axes):
+def summation(a, axes=None):
     return Summation(axes)(a)
-
 
 
 class Matmul(TensorOp):
@@ -248,7 +248,7 @@ class Matmul(TensorOp):
         dim2 = len(rhs.shape)
         dim3 = len(out_grad.shape)
 
-        # 如果输出的shape比输入高，说明在前面做了broadcast，那么就要把这些broadcase给sum起来
+        # 如果输出的shape比输入高，说明在前面做了broadcast，那么就要把这些broadcast给sum起来
         if dim3 > dim1:
             lhs_grad = summation(lhs_grad, tuple(range(dim3 - dim1)))
         if dim3 > dim2:
@@ -270,3 +270,34 @@ class ReLU(TensorOp):
 
 def relu(a):
     return ReLU()(a)
+
+class LogSumExp(TensorOp):
+    def __init__(self, axes: Optional[tuple] = None):
+        self.axes = axes
+
+    def compute(self, Z):
+        self.max_value = array_api.max(Z.data, self.axes, keepdims=True)
+        max_z = array_api.broadcast_to(self.max_value, Z.shape)
+        Z = array_api.exp(Z - max_z)
+        Z = array_api.sum(Z, self.axes)
+        Z = array_api.log(Z)
+        return Z + array_api.reshape(self.max_value, Z.shape)
+
+    def gradient(self, out_grad, node):
+        hs, = node.inputs
+        input_shape = hs.shape
+        max_z = array_api.broadcast_to(self.max_value, input_shape)
+        base_shape = list(input_shape)
+        if isinstance(self.axes, int): 
+            self.axes = (self.axes,)
+        axes = list(range(len(base_shape))) if self.axes is None else self.axes
+        for ax in axes:
+            base_shape[ax] = 1
+        out_grad = out_grad / summation(exp(hs - max_z), self.axes)
+        out_grad = reshape(out_grad, base_shape)
+        out_grad = broadcast_to(out_grad, input_shape)
+        out_grad = out_grad * exp(hs - max_z)
+        return (out_grad, )
+
+def logsumexp(a, axes=None):
+    return LogSumExp(axes=axes)(a)

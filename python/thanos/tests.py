@@ -336,6 +336,11 @@ class TestNN(unittest.TestCase):
                           [12.920014, -1.4545978, -3.0892954, -6.762379, -9.713004, 12.523148, 9.904757, 15.442993, 8.044141, 11.4106865]],
                 dtype=np.float32), rtol=1e-5, atol=1e-5)
 
+class TestNdarray(unittest.TestCase):
+    def test_swapaxes(self):
+        from .backend_selection import array_api, NDArray
+        x = thanos.Tensor(np.random.rand(3, 4, 5))
+        array_api.swapex(x, 0, 1)
 
 if __name__ == '__main__':
     unittest.main()
