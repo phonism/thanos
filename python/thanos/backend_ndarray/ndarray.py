@@ -76,7 +76,7 @@ def cpu():
 
 
 def default_device():
-    return cpu_numpy()
+    return cpu()
 
 
 def all_devices():
@@ -105,7 +105,9 @@ class NDArray:
             # create copy from numpy array
             device = device if device is not None else default_device()
             array = self.make(other.shape, device=device)
+            #print("FUCK", np.ascontiguousarray(other))
             array.device.from_numpy(np.ascontiguousarray(other), array._handle)
+            #print(array)
             self._init(array)
         else:
             # see if we can create a numpy array from input
@@ -134,6 +136,7 @@ class NDArray:
         """Create a new NDArray with the given properties.  This will allocation the
         memory if handle=None, otherwise it will use the handle of an existing
         array."""
+        #print("================")
         array = NDArray.__new__(NDArray)
         array._shape = tuple(shape)
         array._strides = NDArray.compact_strides(shape) if strides is None else strides
@@ -143,6 +146,8 @@ class NDArray:
             array._handle = array.device.Array(prod(shape))
         else:
             array._handle = handle
+        #print(array.is_compact())
+        #print("=====================")
         return array
 
     ### Properies and string representations
@@ -192,6 +197,8 @@ class NDArray:
 
     def numpy(self):
         """ convert to a numpy array """
+        if self.is_compact() is False:
+            self = self.compact()
         return self.device.to_numpy(
             self._handle, self.shape, self.strides, self._offset
         )
@@ -240,11 +247,15 @@ class NDArray:
             NDArray : reshaped array; this will point to the same memory as the original NDArray.
         """
 
-        ### BEGIN YOUR SOLUTION
-        if prod(new_shape) != prod(self.shape) or not self.is_compact():
+        # TODO if the new shape is not compact, do the compact... it's really trick
+        if self.is_compact() is False:
+            self = self.compact()
+        if prod(new_shape) != prod(self.shape):
             raise ValueError()
-        return self.as_strided(new_shape, self.compact_strides(new_shape))
-        ### END YOUR SOLUTION
+        if not self.is_compact():
+            raise ValueError()
+        x = self.as_strided(new_shape, self.compact_strides(new_shape))
+        return x
 
     def permute(self, new_axes):
         """
@@ -264,27 +275,15 @@ class NDArray:
             to the same memory as the original NDArray (i.e., just shape and
             strides changed).
         """
-
-        ### BEGIN YOUR SOLUTION
-        #new_shape = []
-        #for axes in new_axes:
-            #new_shape.append(self.shape[axes])
-        #return self.as_strided(tuple(new_shape), self.compact_strides(tuple(new_shape)))
-        new_shape = [0 for _ in range(self.ndim)]
-        new_strides = [0 for _ in range(self.ndim)]
-        for i, j in enumerate(new_axes):
-            new_shape[i] = self._shape[j]
-            new_strides[i] = self._strides[j]
-                                        
-        return NDArray.make(
-                shape=new_shape, 
-                strides=None,
-                device=self._device, 
-                handle=None,
-                offset=self._offset,
-        )
-
-        ### END YOUR SOLUTION
+        new_shape = tuple([self.shape[i] for i in new_axes])
+        new_strides = tuple([self.strides[i] for i in new_axes])
+        array = self.make(
+                new_shape, 
+                strides=new_strides, 
+                device=self.device, 
+                handle=self._handle, 
+                offset=self._offset)
+        return array
 
     def broadcast_to(self, new_shape):
         """
@@ -302,24 +301,17 @@ class NDArray:
             NDArray: the new NDArray object with the new broadcast shape; should
             point to the same memory as the original array.
         """
-
-        ### BEGIN YOUR SOLUTION
         for i in range(len(self.shape)):
-            if self.shape[i] != 1 and new_shape[i] != self.shape[i]:
-                raise ValueError()
+            if self.shape[i] != 1:
+                assert new_shape[i] == self.shape[i]
 
         new_strides = []
         for i in range(len(self.shape)):
-            if self.shape[i] == 1 and new_shape[i] != 1:
-                new_strides.append(0)
-            else:
-                new_strides.append(self.strides[i])
-        return NDArray.make(
-                new_shape, strides=tuple(new_strides),
-                device=self.device, handle=self._handle, offset=self._offset)
-        ### END YOUR SOLUTION
+            new_strides.append((0 if self.shape[i] == 1 else self.strides[i]))
+        new_strides = tuple(new_strides)
 
-    ### Get and set elements
+        array = self.make(new_shape, strides=new_strides, device=self.device, handle=self._handle, offset=self._offset)
+        return array
 
     def process_slice(self, sl, dim):
         """ Convert a slice to an explicit start/stop/step """
@@ -562,13 +554,16 @@ class NDArray:
             view = self.reshape((1,) * (self.ndim - 1) + (prod(self.shape),))
             out = NDArray.make((1,) * (self.ndim if keepdims else 0), device=self.device)
         else:
-            view = self.permute(
-                tuple([a for a in range(self.ndim) if a != axis]) + (axis,)
+            tmp = 1
+            for ax in axis:
+                tmp *= self.shape[ax]
+            view = self.reshape(
+                tuple([self.shape[a] for a in range(self.ndim) if a not in axis]) + (tmp,)
             )
             out = NDArray.make(
                     tuple([1 if i == axis else s for i, s in enumerate(self.shape)]) 
                     if keepdims else
-                    tuple([s for i, s in enumerate(self.shape) if i != axis]),
+                    tuple([s for i, s in enumerate(self.shape) if i not in axis]),
                     device=self.device,
             )
         return view, out
@@ -587,7 +582,7 @@ class NDArray:
 def array(a, dtype="float32", device=None):
     """ Convenience methods to match numpy a bit more closely."""
     dtype = "float32" if dtype is None else dtype
-    assert dtype == "float32"
+    #assert dtype == "float32"
     return NDArray(a, device=device)
 
 
@@ -619,3 +614,24 @@ def sum(a, axis=None, keepdims=False):
 
 def reshape(array, new_shape):
     return array.reshape(new_shape)
+
+def negative(array):
+    return -array
+
+def divide(a, b, dtype):
+    return a / b
+
+def power(a, b):
+    return a ** b
+
+def log(a):
+    return a.log()
+
+def exp(a):
+    return a.exp()
+
+def matmul(a, b):
+    return a.matmul(b)
+
+def maximum(a, b):
+    return a.maximum(b)

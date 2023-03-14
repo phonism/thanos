@@ -4,7 +4,7 @@ sys.path.append('../')
 import thanos
 import numpy as np
 
-np.random.seed(4)
+np.random.seed(19)
 
 def gradient_check(f, *args, tol=4.2e-1, backward=False, **kwargs):
     eps = 1e-5
@@ -12,8 +12,13 @@ def gradient_check(f, *args, tol=4.2e-1, backward=False, **kwargs):
     for i in range(len(args)):
         for j in range(args[i].realize_cached_data().size):
             args[i].realize_cached_data().flat[j] += eps
+            #print(i, j)
+            #print(*args)
+            #print(f(*args, **kwargs))
             f1 = float(f(*args, **kwargs).numpy().sum())
             args[i].realize_cached_data().flat[j] -= 2 * eps
+            #print(*args)
+            #print(f(*args, **kwargs).numpy())
             f2 = float(f(*args, **kwargs).numpy().sum())
             args[i].realize_cached_data().flat[j] += eps
             numerical_grads[i].flat[j] = (f1 - f2) / (2 * eps)
@@ -28,54 +33,32 @@ def gradient_check(f, *args, tol=4.2e-1, backward=False, **kwargs):
         np.linalg.norm(computed_grads[i] - numerical_grads[i])
         for i in range(len(args))
     )
+    #print("===============")
+    #print(computed_grads, numerical_grads, "FUCK", error, "YOU", tol, error < tol)
+    #print("===============")
     assert error < tol
     return computed_grads
 
 class TestOps(unittest.TestCase):
-    def test_add(self):
-        a = thanos.Tensor(np.asarray([[0.88282, 0.23415]]))
-        b = thanos.Tensor(np.asarray([[0.18234, 0.22123]]))
-        c = a + b
-        sol = np.asarray([[1.06516, 0.45538]])
-        np.testing.assert_allclose(c.numpy(), sol, rtol=1e-06, atol=1e-06)
+
+    def test_broadcast_to(self):
+        a = thanos.Tensor(np.random.rand(5, 3))
+        a = thanos.ops.broadcast_to(a, (5, 3, 2, 1, 5, 4))
+        np.testing.assert_allclose(a.shape, (5, 3, 2, 1, 5, 4))
+        a = thanos.Tensor(np.random.rand(1, 5, 1, 4))
+        a = thanos.ops.broadcast_to(a, (3, 5, 2, 4))
+        np.testing.assert_allclose(a.shape, (3, 5, 2, 4))
         gradient_check(
-                lambda A, B : A + B,
-                thanos.Tensor(np.random.randn(5, 4)),
-                thanos.Tensor(np.random.randn(5, 4)),
+                lambda A: A.broadcast_to((3, 4, 5, 2)),
+                thanos.Tensor(np.random.randn(3, 4, 5)),
                 backward=True
         )
 
-        d = a + 0.1
-        sol = np.asarray([[0.98282, 0.33415]])
-        np.testing.assert_allclose(d.numpy(), sol, rtol=1e-06, atol=1e-06)
         gradient_check(
-                lambda A : A + 0.1,
-                thanos.Tensor(np.random.randn(5, 4)),
+                lambda A: A.broadcast_to((3, 4, 5)),
+                thanos.Tensor(np.random.randn(3, 1, 5)),
                 backward=True
         )
-
-    def test_sub(self):
-        a = thanos.Tensor(np.asarray([[0.88282, 0.23415]]))
-        b = thanos.Tensor(np.asarray([[0.18234, 0.22123]]))
-        c = a - b
-        sol = np.asarray([[0.70048, 0.01292]])
-        np.testing.assert_allclose(c.numpy(), sol, rtol=1e-06, atol=1e-06)
-        gradient_check(
-                lambda A, B : A - B,
-                thanos.Tensor(np.random.randn(5, 4)),
-                thanos.Tensor(np.random.randn(5, 4)),
-                backward=True
-        )
-
-        d = a - 0.1
-        sol = np.asarray([[0.78282, 0.13415]])
-        np.testing.assert_allclose(d.numpy(), sol, rtol=1e-06, atol=1e-06)
-        gradient_check(
-                lambda A : A - 0.1,
-                thanos.Tensor(np.random.randn(5, 4)),
-                backward=True
-        )
-
 
 if __name__ == '__main__':
     unittest.main()

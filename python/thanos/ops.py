@@ -237,7 +237,7 @@ def summation(a, axes=None):
 
 class Matmul(TensorOp):
     def compute(self, a, b):
-        return array_api.matmul(a, b)
+        return a @ b
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         lhs, rhs = node.inputs

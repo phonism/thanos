@@ -11,7 +11,7 @@ namespace cpu {
 
 #define ALIGNMENT 256
 #define TILE 8
-typedef float scalar_t;
+typedef double scalar_t;
 const size_t ELEM_SIZE = sizeof(scalar_t);
 
 
@@ -374,9 +374,9 @@ void Matmul(const AlignedArray& a, const AlignedArray& b, AlignedArray* out, uin
   /// END YOUR SOLUTION
 }
 
-inline void AlignedDot(const float* __restrict__ a,
-                       const float* __restrict__ b,
-                       float* __restrict__ out) {
+inline void AlignedDot(const scalar_t* __restrict__ a,
+                       const scalar_t* __restrict__ b,
+                       scalar_t* __restrict__ out) {
 
   /**
    * Multiply together two TILE x TILE matrices, and _add _the result to out (it is important to add
@@ -395,9 +395,9 @@ inline void AlignedDot(const float* __restrict__ a,
    *   out: compact 2D array of size TILE x TILE to write to
    */
 
-  a = (const float*)__builtin_assume_aligned(a, TILE * ELEM_SIZE);
-  b = (const float*)__builtin_assume_aligned(b, TILE * ELEM_SIZE);
-  out = (float*)__builtin_assume_aligned(out, TILE * ELEM_SIZE);
+  a = (const scalar_t*)__builtin_assume_aligned(a, TILE * ELEM_SIZE);
+  b = (const scalar_t*)__builtin_assume_aligned(b, TILE * ELEM_SIZE);
+  out = (scalar_t*)__builtin_assume_aligned(out, TILE * ELEM_SIZE);
 
   /// BEGIN YOUR SOLUTION
   for (size_t i = 0; i < TILE; ++i) {
@@ -433,14 +433,14 @@ void MatmulTiled(const AlignedArray& a, const AlignedArray& b, AlignedArray* out
    */
   /// BEGIN YOUR SOLUTION
   for (size_t i = 0; i < m / TILE; ++i) {
-    float A[TILE * n];
+    scalar_t A[TILE * n];
     for (size_t ii = 0; ii < n / TILE; ++ii) {
       for (size_t jj = 0; jj < TILE * TILE; ++jj) {
         A[ii * TILE * TILE + jj] = a.ptr[i * n * TILE + ii * TILE * TILE + jj];
       }
     }
     for (size_t j = 0; j < p / TILE; ++j) {
-      float B[TILE * n];
+      scalar_t B[TILE * n];
       for (size_t ii = 0; ii < n / TILE; ++ii) {
         for (size_t jj = 0; jj < TILE * TILE; ++jj) {
           B[ii * TILE * TILE + jj] = b.ptr[j * TILE * TILE + ii * TILE * p + jj];
@@ -452,7 +452,7 @@ void MatmulTiled(const AlignedArray& a, const AlignedArray& b, AlignedArray* out
         }
       }
       for (int k = 0; k < n / TILE; ++k) {
-        float C[TILE * TILE];
+        scalar_t C[TILE * TILE];
         for (size_t ii = 0; ii < TILE * TILE; ++ii) {
           C[ii] = 0;
         }
