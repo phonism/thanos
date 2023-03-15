@@ -161,12 +161,12 @@ class BatchNorm1d(Module):
             batch = x.shape[0]
             mean = ops.summation(x, axes=0) / batch
             # remember to detach the mean
-            self.running_mean = self.momentum * mean.detach() + (1 - self.momentum) * self.running_mean
+            self.running_mean = (self.momentum * mean.detach() + (1 - self.momentum) * self.running_mean).detach()
             mean = ops.broadcast_to(ops.reshape(mean, (1, self.dim)), x.shape)
             var = ops.summation((x - mean) ** 2, axes=0) / batch
             # remember to detach the var
-            self.running_var = self.momentum * var.detach() + (1 - self.momentum) * self.running_var
-            var = ops.broadcast_to(ops.reshape(var, (1, self.dim)), x.shape)
+            self.running_var = (self.momentum * var.detach() + (1 - self.momentum) * self.running_var).detach()
+            var = ops.broadcast_to(ops.reshape(var, (1, self.dim)), x.shape).detach()
         else:
             mean = self.running_mean.reshape((1, self.dim)).broadcast_to(x.shape)
             var = self.running_var.reshape((1, self.dim)).broadcast_to(x.shape)

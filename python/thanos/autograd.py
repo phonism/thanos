@@ -7,6 +7,7 @@ from thanos import init
 #NDArray = numpy.ndarray
 from .backend_selection import Device, array_api, NDArray, default_device
 
+TENSOR_COUNTER = 0
 
 
 class Op:
@@ -112,6 +113,9 @@ class Value:
             num_outputs: int = 1,
             cached_data: List[object] = None,
             requires_grad: Optional[bool] = None):
+        global TENSOR_COUNTER
+        TENSOR_COUNTER += 1
+
         if requires_grad is None:
             # check the inputs op requires grad
             requires_grad = any(x.requires_grad for x in inputs)
@@ -120,6 +124,11 @@ class Value:
         self.num_outputs = num_outputs
         self.cached_data = cached_data
         self.requires_grad = requires_grad
+
+    def __del__(self):
+        global TENSOR_COUNTER
+        TENSOR_COUNTER -= 1
+
 
     def detach(self):
         """

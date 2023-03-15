@@ -40,7 +40,7 @@ class BackendDevice:
         return NDArray(np.random.rand(*shape).astype(dtype), device=self)
 
     def one_hot(self, n, i, dtype="float32"):
-        return NDArray(np.eye(n, dtype=dtype)[i], device=self)
+        return NDArray(np.eye(n, dtype=dtype)[np.array(i).astype(int)], device=self)
 
     def empty(self, shape, dtype="float32"):
         dtype = "float32" if dtype is None else dtype
@@ -286,6 +286,7 @@ class NDArray:
         return array
 
     def broadcast_to(self, new_shape):
+        # TODO 当前只支持后面broadcast，不支持全部broadcasst，比如(1, 4)无法broadcast到(3,4)
         """
         Broadcast an array to a new shape.  new_shape's elements must be the
         same as the original shape, except for dimensions in the self where
@@ -518,14 +519,12 @@ class NDArray:
         m, n, p = self.shape[0], self.shape[1], other.shape[1]
 
         # if the matrix is aligned, use tiled matrix multiplication
-        if hasattr(self.device, "matmul_tiled") and all(
-            d % self.device.__tile_size__ == 0 for d in (m, n, p)
-        ):
-
+        # TODO current not use matmul_tiled
+        if hasattr(self.device, "matmul_tiled") and all(d % self.device.__tile_size__ == 0 for d in (m, n, p)):
             def tile(a, tile):
                 return a.as_strided(
                     (a.shape[0] // tile, a.shape[1] // tile, tile, tile),
-                    (a.shape[1] * tile, tile, self.shape[1], 1),
+                    (a.shape[1] * tile, tile, a.shape[1], 1),
                 )
 
             t = self.device.__tile_size__
@@ -561,7 +560,7 @@ class NDArray:
                 tuple([self.shape[a] for a in range(self.ndim) if a not in axis]) + (tmp,)
             )
             out = NDArray.make(
-                    tuple([1 if i == axis else s for i, s in enumerate(self.shape)]) 
+                    tuple([1 if i in axis else s for i, s in enumerate(self.shape)]) 
                     if keepdims else
                     tuple([s for i, s in enumerate(self.shape) if i not in axis]),
                     device=self.device,
@@ -573,8 +572,8 @@ class NDArray:
         self.device.reduce_sum(view.compact()._handle, out._handle, view.shape[-1])
         return out
 
-    def max(self, axis=None):
-        view, out = self.reduce_view_out(axis)
+    def max(self, axis=None, keepdims=False):
+        view, out = self.reduce_view_out(axis, keepdims=keepdims)
         self.device.reduce_max(view.compact()._handle, out._handle, view.shape[-1])
         return out
 
@@ -635,3 +634,4 @@ def matmul(a, b):
 
 def maximum(a, b):
     return a.maximum(b)
+
