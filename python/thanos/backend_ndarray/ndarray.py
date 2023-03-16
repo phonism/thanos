@@ -307,8 +307,11 @@ class NDArray:
                 assert new_shape[i] == self.shape[i]
 
         new_strides = []
-        for i in range(len(self.shape)):
-            new_strides.append((0 if self.shape[i] == 1 else self.strides[i]))
+        for i in range(len(new_shape)):
+            if i < len(self.shape):
+                new_strides.append((0 if self.shape[i] == 1 else self.strides[i]))
+            else:
+                new_strides.append(0)
         new_strides = tuple(new_strides)
 
         array = self.make(new_shape, strides=new_strides, device=self.device, handle=self._handle, offset=self._offset)
