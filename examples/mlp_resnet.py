@@ -25,7 +25,7 @@ def ResidualBlock(dim, hidden_dim, norm=nn.BatchNorm1d, drop_prob=0.1):
     return module
 
 
-def MLPResNet(dim, hidden_dim=128, num_blocks=3, num_classes=10, norm=nn.BatchNorm1d, drop_prob=0.1):
+def MLPResNet(dim, hidden_dim=128, num_blocks=10, num_classes=10, norm=nn.BatchNorm1d, drop_prob=0.1):
     modules = [
         nn.Linear(dim, hidden_dim),
         nn.ReLU()
