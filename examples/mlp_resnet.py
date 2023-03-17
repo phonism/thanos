@@ -3,6 +3,7 @@ sys.path.append('../python')
 import thanos.data as data
 import thanos.optim as optim
 import thanos.nn as nn
+import thanos
 import numpy as np
 import time
 import os
@@ -26,7 +27,7 @@ def ResidualBlock(dim, hidden_dim, norm=nn.BatchNorm1d, drop_prob=0.1):
     return module
 
 
-def MLPResNet(dim, hidden_dim=128, num_blocks=10, num_classes=10, norm=nn.BatchNorm1d, drop_prob=0.1):
+def MLPResNet(dim, hidden_dim=128, num_blocks=3, num_classes=10, norm=nn.BatchNorm1d, drop_prob=0.1):
     modules = [
         nn.Linear(dim, hidden_dim),
         nn.ReLU()
@@ -84,8 +85,7 @@ def train_mnist(
     start_time = time.time()
     for idx in range(epochs):
         train_acc, train_loss = epoch(train_dataloader, model, opt)
-        #print(idx, " DONE: train_acc:", train_acc, " train_loss:", train_loss, " tensor_counter:", thanos.autograd.TENSOR_COUNTER, " duration:", time.time() - start_time)
-        print(idx, " DONE: train_acc:", train_acc, " train_loss:", train_loss, " duration:", time.time() - start_time)
+        print(idx, " DONE: train_acc:", train_acc, " train_loss:", train_loss, " tensor_counter:", thanos.autograd.TENSOR_COUNTER, " duration:", time.time() - start_time)
         start_time = time.time()
     test_acc, test_loss = epoch(test_dataloader, model)
     return (train_acc, train_loss, test_acc, test_loss)

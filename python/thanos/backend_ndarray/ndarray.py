@@ -252,10 +252,10 @@ class NDArray:
         x = self.as_strided(new_shape, self.compact_strides(new_shape))
         return x
 
-    def permute(self, new_axes):
+    def permute(self, new_axis):
         """
-        Permute order of the dimensions.  new_axes describes a permutation of the
-        existing axes, so e.g.:
+        Permute order of the dimensions.  new_axis describes a permutation of the
+        existing axis, so e.g.:
           - If we have an array with dimension "BHWC" then .permute((0,3,1,2))
             would convert this to "BCHW" order.
           - For a 2D array, .permute((1,0)) would transpose the array.
@@ -264,14 +264,14 @@ class NDArray:
         it returns a new array that has the dimensions permuted as desired, but
         which points to the same memory as the original array.
         Args:
-            new_axes (tuple): permutation order of the dimensions
+            new_axis (tuple): permutation order of the dimensions
         Returns:
             NDarray : new NDArray object with permuted dimensions, pointing
             to the same memory as the original NDArray (i.e., just shape and
             strides changed).
         """
-        new_shape = tuple([self.shape[i] for i in new_axes])
-        new_strides = tuple([self.strides[i] for i in new_axes])
+        new_shape = tuple([self.shape[i] for i in new_axis])
+        new_strides = tuple([self.strides[i] for i in new_axis])
         array = self.make(
                 new_shape, 
                 strides=new_strides, 

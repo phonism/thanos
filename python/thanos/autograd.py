@@ -30,8 +30,7 @@ class Op:
         output: Array
             Array output of the operation
         """
-        return args[0]
-        #raise NotImplementedError()
+        raise NotImplementedError()
 
     def gradient(self, out_grad: "Value", node: "Value") -> Union["Value", Tuple["Value"]]:
         """Compute partial adjoint for each input value for a given output adjoint.
@@ -170,7 +169,7 @@ class Tensor(Value):
             *,
             device: Optional[Device] = None,
             dtype=None,
-            requires_grad=None,
+            requires_grad=True,
             **kwargs):
         if isinstance(array, Tensor):
             if device is None:
@@ -306,20 +305,23 @@ class Tensor(Value):
     def exp(self):
         return thanos.ops.Exp()(self)
 
-    def transpose(self, axes=None):
-        return thanos.ops.Transpose(axes)(self)
+    def transpose(self, axis=None):
+        return thanos.ops.Transpose(axis)(self)
 
     def reshape(self, shape):
         return thanos.ops.Reshape(shape)(self)
 
-    def summation(self, axes=None):
-        return thanos.ops.Summation(axes)(self)
+    def summation(self, axis=None):
+        return thanos.ops.Summation(axis)(self)
 
-    def sum(self, axes=None):
-        return thanos.ops.Summation(axes)(self)
+    def sum(self, axis=None):
+        return thanos.ops.Summation(axis)(self)
 
     def broadcast_to(self, shape):
         return thanos.ops.BroadcastTo(shape)(self)
+
+    def __matmul__(self, other):
+        return thanos.ops.Matmul()(self, other)
 
     def matmul(self, other):
         return thanos.ops.Matmul()(self, other)
@@ -328,12 +330,44 @@ class Tensor(Value):
     __radd__ = __add__
     __rsub__ = __sub__
     __rmul__ = __mul__
+    __rmatmul__ = __matmul__
 
 class TensorOp(Op):
     """ Op class specialized to output tensors, will be alterate subclasses for other structures """
 
     def __call__(self, *args):
         return Tensor.make_from_op(self, args)
+
+class TensorTuple(Value):
+    def __len__(self):
+        cdata = self.realize_cached_data()
+        return len(cdata)
+
+    def __getitem__(self, index: int):
+        return thanos.ops.tuple_get_item(self, index)
+
+    def tuple(self):
+        return tuple([x for x in self])
+    
+    def __repr__(self):
+        return "thanos.TensorTuple" + str(self.tuple())
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __add__(self, other):
+        assert isinstance(other, TensorTuple)
+        assert len(self) == len(other)
+        return thanos.ops.make_tuple(*[self[i] + other[i] for i in range(len(self))])
+
+    def detach(self):
+        """Create a new tensor that shares the data but detaches from the graph."""
+        return TensorTuple.make_const(self.realize_cached_data())
+
+class TensorTupleOp(Op):
+    def __call__(self, *args):
+        return TensorTuple.make_from_op(self, args)
+
 
 def compute_gradient_of_variables(out_tensor, out_grad):
     node_to_output_grads_list: Dict[Tensor, List[Tensor]] = {}

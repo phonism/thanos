@@ -2,6 +2,7 @@ import unittest
 import sys
 sys.path.append('../')
 import thanos
+import torch
 import numpy as np
 
 np.random.seed(4)
@@ -156,17 +157,17 @@ class TestOps(unittest.TestCase):
 
     def test_transpose(self):
         a = thanos.Tensor(np.random.rand(3, 4, 5))
-        a = thanos.ops.transpose(a, axes=None)
+        a = thanos.ops.transpose(a, axis=None)
         np.testing.assert_allclose(a.shape, (3, 5, 4))
-        a = thanos.ops.transpose(a, axes=(0, 1))
+        a = thanos.ops.transpose(a, axis=(0, 1))
         np.testing.assert_allclose(a.shape, (5, 3, 4))
         gradient_check(
-                lambda A: A.transpose(axes=(0, 1)),
+                lambda A: A.transpose(axis=(0, 1)),
                 thanos.Tensor(np.random.randn(5, 4)),
                 backward=True
         )
         gradient_check(
-                lambda A: A.transpose(axes=None),
+                lambda A: A.transpose(axis=None),
                 thanos.Tensor(np.random.randn(5, 4)),
                 backward=True
         )
@@ -293,12 +294,26 @@ class TestOps(unittest.TestCase):
     def test_max(self):
         a = thanos.Tensor(np.random.rand(3, 4))
         c = thanos.Tensor(np.random.rand(3, 4))
-        b = thanos.ops.max(a, axes=1)
+        b = thanos.ops.max(a, axis=1)
         gradient_check(
-                lambda A : thanos.ops.max(A, axes=1),
+                lambda A : thanos.ops.max(A, axis=1),
                 a,
                 backward=True
         )
+
+    def tests_stack(self):
+        shape = (2, 3)
+        l = 3
+        axis = 0
+        _A = [np.random.randn(*shape).astype(np.float32) for i in range(l)]
+        A = [thanos.Tensor(thanos.array_api.array(_A[i])) for i in range(l)]
+        A_t = [torch.Tensor(_A[i]) for i in range(l)]
+        for i in range(l):
+            A_t[i].requires_grad = True
+        thanos.ops.stack(A, axis=axis).sum().backward()
+        torch.stack(A_t, dim=axis).sum().backward()
+        for i in range(l):
+            np.testing.assert_allclose(A_t[i].grad.numpy(), A[i].grad.numpy(), atol=1e-5, rtol=1e-5)
 
 def get_tensor(*shape, entropy=1):
     np.random.seed(np.prod(shape) * len(shape) * entropy)
@@ -329,6 +344,12 @@ class TestNN(unittest.TestCase):
                 a,
                 backward=True
         )
+
+    def test_attention(self):
+        attention = thanos.nn.Attention()
+        x = thanos.Tensor(np.random.rand(100, 64))
+        attention(x)
+
 
 if __name__ == '__main__':
     unittest.main()

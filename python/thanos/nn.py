@@ -159,11 +159,11 @@ class BatchNorm1d(Module):
     def forward(self, x: Tensor) -> Tensor:
         if self.training:
             batch = x.shape[0]
-            mean = ops.summation(x, axes=0) / batch
+            mean = ops.summation(x, axis=0) / batch
             # remember to detach the mean
             self.running_mean = (self.momentum * mean.detach() + (1 - self.momentum) * self.running_mean).detach()
             mean = ops.broadcast_to(ops.reshape(mean, (1, self.dim)), x.shape)
-            var = ops.summation((x - mean) ** 2, axes=0) / batch
+            var = ops.summation((x - mean) ** 2, axis=0) / batch
             # remember to detach the var
             self.running_var = (self.momentum * var.detach() + (1 - self.momentum) * self.running_var).detach()
             var = ops.broadcast_to(ops.reshape(var, (1, self.dim)), x.shape).detach()
@@ -180,13 +180,27 @@ class SoftmaxLoss(Module):
     def forward(self, logits: Tensor, y: Tensor):
         num, classes = logits.shape
         y_one_hot = init.one_hot(classes, y, dtype=logits.dtype)
-        logsum = ops.logsumexp(logits, axes=(1,))
-        logits_y = ops.summation(logits * y_one_hot, axes=(1,))
+        logsum = ops.logsumexp(logits, axis=(1,))
+        logits_y = ops.summation(logits * y_one_hot, axis=(1,))
         loss = logsum - logits_y
         return ops.summation(loss) / logits.shape[0]
 
 class Softmax(Module):
     def forward(self, x: Tensor):
         x_exp = ops.exp(x - ops.broadcast_to(ops.max(x, -1), x.shape))
-        x = x_exp / ops.broadcast_to(ops.summation(x_exp, axes=1), x.shape)
+        x = x_exp / ops.broadcast_to(ops.summation(x_exp, axis=1), x.shape)
         return x
+
+
+class Attention(Module):
+    def __init__(self, device=None, dtype="float32"):
+        self.dim = 64
+        self.w_kqv = Parameter(
+                init.kaiming_uniform(self.dim, self.dim * 3),
+                device=device, dtype=dtype)
+        self.softmax = Softmax()
+
+    def forward(self, x: Tensor):
+        k, q, v = ops.split(ops.reshape(x @ self.w_kqv, (x.shape[0], self.dim, 3)), axis=2)
+        atten = self.softmax(k @ q.transpose() / np.sqrt(x.shape[1]))
+
