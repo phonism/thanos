@@ -1,6 +1,7 @@
 import sys
 sys.path.append('../python')
-import thanos
+import thanos.data as data
+import thanos.optim as optim
 import thanos.nn as nn
 import numpy as np
 import time
@@ -65,25 +66,26 @@ def epoch(dataloader, model, opt=None):
     return acc, loss_all / (idx + 1)
 
 def train_mnist(
-        batch_size=128, epochs=10, optimizer=thanos.optim.Adam,
+        batch_size=128, epochs=10, optimizer=optim.Adam,
         lr=0.001, weight_decay=0.001, hidden_dim=128, data_dir="data"):
     np.random.seed(4)
     train_img_path = os.path.join(data_dir, "train-images-idx3-ubyte.gz")
     train_label_path = os.path.join(data_dir, "train-labels-idx1-ubyte.gz")
     test_img_path = os.path.join(data_dir, "t10k-images-idx3-ubyte.gz")
     test_label_path = os.path.join(data_dir, "t10k-labels-idx1-ubyte.gz")
-    train_dataset = thanos.data.MNISTDataset(train_img_path, train_label_path)
-    test_dataset = thanos.data.MNISTDataset(test_img_path, test_label_path)
+    train_dataset = data.MNISTDataset(train_img_path, train_label_path)
+    test_dataset = data.MNISTDataset(test_img_path, test_label_path)
 
-    train_dataloader = thanos.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    test_dataloader = thanos.data.DataLoader(test_dataset)
+    train_dataloader = data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_dataloader = data.DataLoader(test_dataset)
     model = MLPResNet(784, hidden_dim=hidden_dim)
     opt = optimizer(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     start_time = time.time()
     for idx in range(epochs):
         train_acc, train_loss = epoch(train_dataloader, model, opt)
-        print(idx, " DONE: train_acc:", train_acc, " train_loss:", train_loss, " tensor_counter:", thanos.autograd.TENSOR_COUNTER, " duration:", time.time() - start_time)
+        #print(idx, " DONE: train_acc:", train_acc, " train_loss:", train_loss, " tensor_counter:", thanos.autograd.TENSOR_COUNTER, " duration:", time.time() - start_time)
+        print(idx, " DONE: train_acc:", train_acc, " train_loss:", train_loss, " duration:", time.time() - start_time)
         start_time = time.time()
     test_acc, test_loss = epoch(test_dataloader, model)
     return (train_acc, train_loss, test_acc, test_loss)

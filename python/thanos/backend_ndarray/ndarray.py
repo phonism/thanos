@@ -105,9 +105,7 @@ class NDArray:
             # create copy from numpy array
             device = device if device is not None else default_device()
             array = self.make(other.shape, device=device)
-            #print("FUCK", np.ascontiguousarray(other))
             array.device.from_numpy(np.ascontiguousarray(other), array._handle)
-            #print(array)
             self._init(array)
         else:
             # see if we can create a numpy array from input
@@ -136,7 +134,6 @@ class NDArray:
         """Create a new NDArray with the given properties.  This will allocation the
         memory if handle=None, otherwise it will use the handle of an existing
         array."""
-        #print("================")
         array = NDArray.__new__(NDArray)
         array._shape = tuple(shape)
         array._strides = NDArray.compact_strides(shape) if strides is None else strides
@@ -146,8 +143,6 @@ class NDArray:
             array._handle = array.device.Array(prod(shape))
         else:
             array._handle = handle
-        #print(array.is_compact())
-        #print("=====================")
         return array
 
     ### Properies and string representations
@@ -549,6 +544,16 @@ class NDArray:
             )
             return out
 
+    def norm_axis(self, a, axis):
+        if type(axis) is int:
+            axis = (axis,)
+        new_axis = []
+        for ax in axis:
+            if ax < 0:
+                ax = ax + len(a.shape)
+            new_axis.append(ax)
+        return tuple(new_axis)
+
     ### Reductions, i.e., sum/max over all element or over given axis
     def reduce_view_out(self, axis, keepdims=False):
         """ Return a view to the array set up for reduction functions and output array. """
@@ -557,6 +562,7 @@ class NDArray:
             out = NDArray.make((1,) * (self.ndim if keepdims else 0), device=self.device)
         else:
             tmp = 1
+            axis = self.norm_axis(self, axis)
             for ax in axis:
                 tmp *= self.shape[ax]
             view = self.reshape(
@@ -580,6 +586,21 @@ class NDArray:
         self.device.reduce_max(view.compact()._handle, out._handle, view.shape[-1])
         return out
 
+    def diag(self):
+        """ Convert a matrix to be compact """
+        if len(self.shape) == 1:
+            new_shape = (self.shape[0], self.shape[0])
+            out = NDArray.make(new_shape, device=self.device)
+            self.device.diag(
+                self._handle, out._handle, self.shape, self.strides
+            )
+        else:
+            new_shape = list(self.shape)[:-1]
+            out = NDArray.make(tuple(new_shape), device=self.device)
+            self.device.diag(
+                self._handle, out._handle, self.shape, self.strides
+            )
+        return out
 
 def array(a, dtype="float32", device=None):
     """ Convenience methods to match numpy a bit more closely."""
@@ -612,7 +633,14 @@ def swapaxes(array, x, y):
     return array.permute(tuple(new_shape))
 
 def sum(a, axis=None, keepdims=False):
+    if type(axis) is int:
+        axis = (axis, )
     return a.sum(axis=axis, keepdims=keepdims)
+
+def max(a, axis=None, keepdims=False):
+    if type(axis) is int:
+        axis = (axis, )
+    return a.max(axis=axis, keepdims=keepdims)
 
 def reshape(array, new_shape):
     return array.reshape(new_shape)
@@ -638,3 +666,5 @@ def matmul(a, b):
 def maximum(a, b):
     return a.maximum(b)
 
+def diag(a):
+    return a.diag()

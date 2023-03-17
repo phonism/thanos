@@ -290,6 +290,15 @@ class TestOps(unittest.TestCase):
                 backward=True
         )
 
+    def test_max(self):
+        a = thanos.Tensor(np.random.rand(3, 4))
+        c = thanos.Tensor(np.random.rand(3, 4))
+        b = thanos.ops.max(a, axes=1)
+        gradient_check(
+                lambda A : thanos.ops.max(A, axes=1),
+                a,
+                backward=True
+        )
 
 def get_tensor(*shape, entropy=1):
     np.random.seed(np.prod(shape) * len(shape) * entropy)
@@ -311,6 +320,15 @@ class TestNN(unittest.TestCase):
         linear = thanos.nn.Linear(10, 50)
         x = linear(x)
         np.testing.assert_allclose(x.shape, (128, 50))
+
+    def test_softmax(self):
+        softmax = thanos.nn.Softmax()
+        a = thanos.Tensor(np.random.rand(3, 4))
+        gradient_check(
+                lambda A : softmax(A),
+                a,
+                backward=True
+        )
 
 if __name__ == '__main__':
     unittest.main()

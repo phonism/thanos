@@ -484,6 +484,41 @@ void ReduceSum(const AlignedArray& a, AlignedArray* out, size_t reduce_size) {
     }
 }
 
+/**
+ * return diag
+ *
+ * Args:
+ *   a: compact array of size a.size = out.size * reduce_size to reduce over
+ *   out: compact array to write into
+ */
+void Diag(const AlignedArray& a, AlignedArray* out, std::vector<uint32_t>& shape, std::vector<uint32_t>& strides) {
+    uint32_t dim = shape.size();
+    if (dim > 1) {
+        uint32_t total_cnt = 1;
+        for (size_t i = 0; i < shape.size(); ++i) {
+            total_cnt *= shape[i];
+        }
+
+        size_t idx = 0;
+        for (size_t cnt = 0; cnt < total_cnt; ++cnt) {
+            if (cnt % shape[dim - 1] == cnt / shape[dim - 1]) {
+                out->ptr[idx] = a.ptr[cnt];
+                idx++;
+            }
+        }
+    } else {
+        for (size_t i = 0; i < shape[0]; ++i) {
+            for (size_t j = 0; j < shape[0]; ++j) {
+                if (i == j) {
+                    out->ptr[i * shape[0] + j] = a.ptr[i];
+                } else {
+                    out->ptr[i * shape[0] + j] = 0;
+                }
+            }
+        }
+    }
+}
+
 }  // namespace cpu
 }  // namespace thanos
 
@@ -539,4 +574,5 @@ PYBIND11_MODULE(ndarray_backend_cpu, m) {
     m.def("matmul_tiled", MatmulTiled);
     m.def("reduce_max", ReduceMax);
     m.def("reduce_sum", ReduceSum);
+    m.def("diag", Diag);
 }

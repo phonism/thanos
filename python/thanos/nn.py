@@ -184,3 +184,9 @@ class SoftmaxLoss(Module):
         logits_y = ops.summation(logits * y_one_hot, axes=(1,))
         loss = logsum - logits_y
         return ops.summation(loss) / logits.shape[0]
+
+class Softmax(Module):
+    def forward(self, x: Tensor):
+        x_exp = ops.exp(x - ops.broadcast_to(ops.max(x, -1), x.shape))
+        x = x_exp / ops.broadcast_to(ops.summation(x_exp, axes=1), x.shape)
+        return x

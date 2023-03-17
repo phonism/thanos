@@ -229,7 +229,6 @@ class Summation(TensorOp):
                 new_axes.append(x + len(hs.shape))
         for x in sorted(new_axes):
             grad_shape.insert(x, 1)
-        #print(out_grad.shape, grad_shape, hs.shape)
         return broadcast_to(reshape(out_grad, grad_shape), hs.shape).detach()
 
 def summation(a, axes=None):
@@ -302,3 +301,49 @@ class LogSumExp(TensorOp):
 
 def logsumexp(a, axes=None):
     return LogSumExp(axes=axes)(a)
+
+class Equal(TensorOp):
+    def compute(self, a: NDArray, b: NDArray):
+        return a == b
+
+    def gradient(self, out_grad: Tensor, node: Tensor):
+        a, b = node.inputs
+        grad_a = array_api.reduce_sum(out_grad, axis=None, keepdims=False)
+        grad_b = array_api.reduce_sum(out_grad, axis=None, keepdims=False)
+        return grad_a.detach(), grad_b.detach()
+
+def equal(a, b):
+    return Equal()(a, b)
+
+
+class Max(TensorOp):
+    def __init__(self, axes: Optional[tuple] = None):
+        self.axes = axes
+        if isinstance(self.axes, int):
+            self.axes = (self.axes,)
+
+    def compute(self, a):
+        return array_api.max(a, self.axes, keepdims=False)
+
+    def gradient(self, out_grad: Tensor, node: Tensor):
+        # Your code here
+        hs, = node.inputs
+        if self.axes is None:
+            axes = hs.shape
+        else:
+            axes = self.axes
+        grad_shape = list(out_grad.shape)
+        new_axes = []
+        for x in axes:
+            if x >= 0:
+                new_axes.append(x)
+            else:
+                new_axes.append(x + len(hs.shape))
+        for x in sorted(new_axes):
+            grad_shape.insert(x, 1)
+        mask = hs.equal(broadcast_to(max(hs, axes=self.axes), hs.shape))
+        return (broadcast_to(out_grad, hs.shape) * mask).detach()
+
+
+def max(a, axes=None):
+    return Max(axes)(a)

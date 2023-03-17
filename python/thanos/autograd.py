@@ -294,6 +294,12 @@ class Tensor(Value):
     def __neg__(self):
         return thanos.ops.Negate()(self)
 
+    def equal(self, other):
+        if isinstance(other, Tensor):
+            return thanos.ops.Equal()(self, other)
+        else:
+            return thanos.ops.Equal()(self, other)
+
     def log(self):
         return thanos.ops.Log()(self)
 
