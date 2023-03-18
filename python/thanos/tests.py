@@ -185,18 +185,18 @@ class TestOps(unittest.TestCase):
         )
 
     def test_broadcast_to(self):
-        a = thanos.Tensor(np.random.rand(5, 4))
-        a = thanos.ops.broadcast_to(a, (5, 4, 2, 1, 5, 4))
-        np.testing.assert_allclose(a.shape, (5, 4, 2, 1, 5, 4))
+        a = thanos.Tensor(np.random.rand(1, 5, 4))
+        a = thanos.ops.broadcast_to(a, (3, 5, 4))
+        np.testing.assert_allclose(a.shape, (3, 5, 4))
         gradient_check(
                 lambda A: A.broadcast_to((3, 4, 5, 2)),
-                thanos.Tensor(np.random.randn(3, 4, 5)),
+                thanos.Tensor(np.random.randn(3, 4, 5, 1)),
                 backward=True
         )
 
         gradient_check(
                 lambda A: A.broadcast_to((3, 4, 5)),
-                thanos.Tensor(np.random.randn(1, 1)),
+                thanos.Tensor(np.random.randn(1, 1, 1)),
                 backward=True
         )
 

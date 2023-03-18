@@ -187,8 +187,8 @@ class SoftmaxLoss(Module):
 
 class Softmax(Module):
     def forward(self, x: Tensor):
-        x_exp = ops.exp(x - ops.broadcast_to(ops.max(x, -1), x.shape))
-        x = x_exp / ops.broadcast_to(ops.summation(x_exp, axis=1), x.shape)
+        x_exp = ops.exp(x - ops.broadcast_to(ops.max(x, -1, keepdims=True), x.shape))
+        x = x_exp / ops.broadcast_to(ops.summation(x_exp, axis=1, keepdims=True), x.shape)
         return x
 
 

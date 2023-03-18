@@ -231,12 +231,13 @@ class BroadcastTo(TensorOp):
     def gradient(self, out_grad: Tensor, node: Tensor):
         hs, = node.inputs
         input_shape = list(hs.shape)
-        base_shape = input_shape + [1] * (len(self.shape) - len(input_shape))
+        base_shape = [1] * (len(self.shape) - len(input_shape)) + input_shape
         axis = []
         for i in range(len(base_shape)):
             if base_shape[i] != self.shape[i]:
                 axis.append(i)
         out_grad = summation(out_grad, axis=tuple(axis))
+        
         return reshape(out_grad, input_shape).detach()
 
 
@@ -245,13 +246,14 @@ def broadcast_to(a, shape):
 
 
 class Summation(TensorOp):
-    def __init__(self, axis: Optional[tuple] = None):
+    def __init__(self, axis: Optional[tuple] = None, keepdims: Optional[bool] = False):
         self.axis = axis
         if isinstance(self.axis, int):
             self.axis = (self.axis,)
+        self.keepdims = keepdims
 
     def compute(self, a):
-        return array_api.sum(a, self.axis, keepdims=False)
+        return array_api.sum(a, self.axis, keepdims=self.keepdims)
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         hs, = node.inputs
@@ -270,8 +272,8 @@ class Summation(TensorOp):
             grad_shape.insert(x, 1)
         return broadcast_to(reshape(out_grad, grad_shape), hs.shape).detach()
 
-def summation(a, axis=None):
-    return Summation(axis)(a)
+def summation(a, axis=None, keepdims=False):
+    return Summation(axis, keepdims)(a)
 
 
 class Matmul(TensorOp):
@@ -356,13 +358,14 @@ def equal(a, b):
 
 
 class Max(TensorOp):
-    def __init__(self, axis: Optional[tuple] = None):
+    def __init__(self, axis: Optional[tuple] = None, keepdims: Optional[bool] =False):
         self.axis = axis
         if isinstance(self.axis, int):
             self.axis = (self.axis,)
+        self.keepdims = keepdims
 
     def compute(self, a):
-        return array_api.max(a, self.axis, keepdims=False)
+        return array_api.max(a, self.axis, keepdims=self.keepdims)
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         # Your code here
@@ -383,8 +386,8 @@ class Max(TensorOp):
         mask = hs.equal(broadcast_to(max(hs, axis=self.axis), hs.shape))
         return (broadcast_to(out_grad, hs.shape) * mask).detach()
 
-def max(a, axis=None):
-    return Max(axis)(a)
+def max(a, axis=None, keepdims=False):
+    return Max(axis, keepdims)(a)
 
 class Stack(TensorOp):
     def __init__(self, axis: int):
@@ -416,7 +419,6 @@ class Split(TensorTupleOp):
     def compute(self, x):
         in_shape = x.shape
         idx = [slice(None, None, None) for j in range(len(in_shape))]
-        #print(idx)
         results = []
         for i in range(in_shape[self.axis]):
             idx_i = idx.copy()
