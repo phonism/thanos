@@ -30,6 +30,24 @@ def _unpack_params(value: object) -> List[Tensor]:
     else:
         return []
 
+def _unpack_vars(value: object) -> List[Tensor]:
+    if isinstance(value, Tensor):
+        return [value]
+    elif isinstance(value, Module):
+        return value.vars()
+    elif isinstance(value, dict):
+        var_list = []
+        for k, v in value.items():
+            var_list += _unpack_vars(v)
+        return var_list
+    elif isinstance(value, (list, tuple)):
+        var_list = []
+        for v in value:
+            var_list += _unpack_vars(v)
+        return var_list
+    else:
+        return []
+
 def _child_modules(value: object) -> List["Module"]:
     if isinstance(value, Module):
         modules = [value]
@@ -56,6 +74,10 @@ class Module:
         """Return the list of parameters in the module."""
         return _unpack_params(self.__dict__)
 
+    def vars(self) -> List[Tensor]:
+        """Return the list of parameters in the module."""
+        return _unpack_vars(self.__dict__)
+
     def _children(self):
         return _child_modules(self.__dict__)
 
@@ -68,6 +90,12 @@ class Module:
         self.training = False
         for m in self._children():
             m.training = False
+
+    def cuda(self):
+        for idx in range(len(self.parameters())):
+            self.parameters()[idx].set_device()
+        for idx in range(len(self.vars())):
+            self.vars()[idx].set_device()
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
@@ -122,7 +150,7 @@ class Dropout(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         if self.training and self.p > 0.0:
-            mask = init.randb(*x.shape, p=(1 - self.p), dtype=x.dtype)
+            mask = init.randb(*x.shape, p=(1 - self.p), dtype=x.dtype, device=x.device)
             x = x * mask / (1 - self.p)
         return x
 
@@ -179,7 +207,7 @@ class BatchNorm1d(Module):
 class SoftmaxLoss(Module):
     def forward(self, logits: Tensor, y: Tensor):
         num, classes = logits.shape
-        y_one_hot = init.one_hot(classes, y, dtype=logits.dtype)
+        y_one_hot = init.one_hot(classes, y, dtype=logits.dtype, device=logits.device)
         logsum = ops.logsumexp(logits, axis=(1,))
         logits_y = ops.summation(logits * y_one_hot, axis=(1,))
         loss = logsum - logits_y

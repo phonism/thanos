@@ -97,11 +97,12 @@ class DataLoader:
         dataset: Dataset,
         batch_size: Optional[int] = 1,
         shuffle: bool = False,
+        device=None,
     ):
-
         self.dataset = dataset
         self.shuffle = shuffle
         self.batch_size = batch_size
+        self.device = device
         if not self.shuffle:
             self.ordering = np.array_split(np.arange(len(dataset)), 
                                            range(batch_size, len(dataset), batch_size))
@@ -122,7 +123,7 @@ class DataLoader:
         if self.idx < len(self.ordering):
             data = self.dataset[self.ordering[self.idx]]
             self.idx += 1
-            return [Tensor(x) for x in data]
+            return [Tensor(x, device=self.device) for x in data]
         else:
             raise StopIteration
         ### END YOUR SOLUTION

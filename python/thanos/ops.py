@@ -307,7 +307,7 @@ class ReLU(TensorOp):
     def gradient(self, out_grad: Tensor, node: Tensor):
         hs, = node.inputs
         input_relu = relu(hs).numpy()
-        return (out_grad * Tensor(input_relu > 0)).detach()
+        return (out_grad * Tensor(input_relu > 0, device=hs.device)).detach()
 
 def relu(a):
     return ReLU()(a)

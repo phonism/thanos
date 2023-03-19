@@ -248,6 +248,9 @@ class Tensor(Value):
             return default_device()
         return data.device
 
+    def set_device(self):
+        self.cached_data = array_api.array(self.cached_data, device=thanos.cuda())
+
     def __repr__(self):
         return "Id:" + str(id(self)) + " Tensor(" + str(self.realize_cached_data()) + ")"
 
