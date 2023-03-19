@@ -561,12 +561,12 @@ class NDArray:
             view = self.reshape((1,) * (self.ndim - 1) + (prod(self.shape),))
             out = NDArray.make((1,) * (self.ndim if keepdims else 0), device=self.device)
         else:
-            tmp = 1
+            tmp = []
             axis = self.norm_axis(self, axis)
             for ax in axis:
-                tmp *= self.shape[ax]
-            view = self.reshape(
-                tuple([self.shape[a] for a in range(self.ndim) if a not in axis]) + (tmp,)
+                tmp.append(ax)
+            view = self.permute(
+                tuple([a for a in range(self.ndim) if a not in axis]) + tuple(tmp)
             )
             out = NDArray.make(
                     tuple([1 if i in axis else s for i, s in enumerate(self.shape)]) 

@@ -1,4 +1,6 @@
 import numpy as np
+import gzip
+import struct
 from .autograd import Tensor
 
 from typing import Iterator, Optional, List, Sized, Union, Iterable, Any
@@ -23,11 +25,9 @@ class RandomFlipHorizontal(Transform):
         Note: use the provided code to provide randomness, for easier testing
         """
         flip_img = np.random.rand() < self.p
-        ### BEGIN YOUR SOLUTION
         if flip_img:
             img = img[:, ::-1, :]
         return img
-        ### END YOUR SOLUTION
 
 
 class RandomCrop(Transform):
@@ -43,14 +43,12 @@ class RandomCrop(Transform):
         Note: generate the image shifted by shift_x, shift_y specified below
         """
         shift_x, shift_y = np.random.randint(low=-self.padding, high=self.padding+1, size=2)
-        ### BEGIN YOUR SOLUTION
         h, w, c = img.shape
         new_img = np.zeros([h + self.padding * 2, w + self.padding * 2, c])
         new_img[self.padding: self.padding + h, self.padding: self.padding + w, :] = img
         coord_x = self.padding + shift_x
         coord_y = self.padding + shift_y
         return new_img[coord_x: coord_x + h, coord_y: coord_y + w, :]
-        ### END YOUR SOLUTION
 
 
 class Dataset:
@@ -108,25 +106,21 @@ class DataLoader:
                                            range(batch_size, len(dataset), batch_size))
 
     def __iter__(self):
-        ### BEGIN YOUR SOLUTION
         self.idx = 0
         self.len = len(self.dataset) // self.batch_size
         if self.shuffle: 
             tmp_range = np.arange(len(self.dataset))
             np.random.shuffle(tmp_range)
             self.ordering = np.array_split(tmp_range, range(self.batch_size, len(self.dataset), self.batch_size))
-        ### END YOUR SOLUTION
         return self
 
     def __next__(self):
-        ### BEGIN YOUR SOLUTION
         if self.idx < len(self.ordering):
             data = self.dataset[self.ordering[self.idx]]
             self.idx += 1
             return [Tensor(x, device=self.device) for x in data]
         else:
             raise StopIteration
-        ### END YOUR SOLUTION
 
 
 class MNISTDataset(Dataset):
@@ -136,18 +130,13 @@ class MNISTDataset(Dataset):
         label_filename: str,
         transforms: Optional[List] = None,
     ):
-        ### BEGIN YOUR SOLUTION
-        import gzip
-        import struct
         with gzip.open(image_filename, "rb") as f:
             self.X = np.frombuffer(f.read(), np.uint8, offset=16).reshape(-1, 784).astype('float32') / 255
         with gzip.open(label_filename, "rb") as f:
             self.y = np.frombuffer(f.read(), np.uint8, offset=8)
         self.transforms = transforms
-        ### END YOUR SOLUTION
 
     def __getitem__(self, index) -> object:
-        ### BEGIN YOUR SOLUTION
         x = self.X[index]
         if len(x.shape) > 1:
             for i in range(x.shape[0]):
@@ -163,12 +152,9 @@ class MNISTDataset(Dataset):
                 for tform in self.transforms:
                     x = tform(x)
             return (x, self.y[index])
-        ### END YOUR SOLUTION
 
     def __len__(self) -> int:
-        ### BEGIN YOUR SOLUTION
         return len(self.X)
-        ### END YOUR SOLUTION
 
 class NDArrayDataset(Dataset):
     def __init__(self, *arrays):

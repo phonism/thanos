@@ -78,7 +78,7 @@ class Module:
         """Return the list of parameters in the module."""
         return _unpack_vars(self.__dict__)
 
-    def _children(self):
+    def _children(self) -> List["Module"]:
         return _child_modules(self.__dict__)
 
     def train(self):
@@ -133,12 +133,12 @@ class Linear(Module):
 
 
 class Flatten(Module):
-    def forward(self, x):
+    def forward(self, x) -> Tensor:
         return ops.reshape(x, (x.shape[0], -1))
 
 
 class ReLU(Module):
-    def forward(self, x: Tensor):
+    def forward(self, x: Tensor) -> Tensor:
         x = ops.relu(x)
         return x
 
@@ -154,26 +154,16 @@ class Dropout(Module):
             x = x * mask / (1 - self.p)
         return x
 
-
-
 class Residual(Module):
     def __init__(self, fn: Module):
         super().__init__()
         self.fn = fn
 
-    def forward(self, x: Tensor):
+    def forward(self, x: Tensor) -> Tensor:
         return self.fn(x) + x
 
 class BatchNorm1d(Module):
-    """
-    其中，通过均值和方差来计算标准化因子的公式如下：
-    $$ \hat{x_i} = \frac{x_i - E[x]}{\sqrt{Var[x]+ \epsilon}} $$
-    其中， $\epsilon$ 为防止除数为0的小常数， $E[x]$ 和 $Var[x]$ 分别为当前batch内 $x$ 的均值和方差。
-    对输入数据进行归一化和平移的公式如下：
-    $$ y_i = \gamma \hat{x_i} + \beta $$
-    其中， $\gamma$ 和 $\beta$ 为可学习的参数，分别用于缩放和偏移标准化后的数据。
-    """
-    def __init__(self, dim, eps=1e-5, momentum=0.1, device=None, dtype="float32"):
+    def __init__(self, dim: int, eps=1e-5, momentum=0.1, device=None, dtype="float32"):
         super().__init__()
         self.dim = dim
         self.eps = eps
@@ -205,7 +195,7 @@ class BatchNorm1d(Module):
         return x
 
 class SoftmaxLoss(Module):
-    def forward(self, logits: Tensor, y: Tensor):
+    def forward(self, logits: Tensor, y: Tensor) -> Tensor:
         num, classes = logits.shape
         y_one_hot = init.one_hot(classes, y, dtype=logits.dtype, device=logits.device)
         logsum = ops.logsumexp(logits, axis=(1,))
@@ -214,7 +204,7 @@ class SoftmaxLoss(Module):
         return ops.summation(loss) / logits.shape[0]
 
 class Softmax(Module):
-    def forward(self, x: Tensor):
+    def forward(self, x: Tensor) -> Tensor:
         x_exp = ops.exp(x - ops.broadcast_to(ops.max(x, -1, keepdims=True), x.shape))
         x = x_exp / ops.broadcast_to(ops.summation(x_exp, axis=1, keepdims=True), x.shape)
         return x
@@ -228,7 +218,7 @@ class Attention(Module):
                 device=device, dtype=dtype)
         self.softmax = Softmax()
 
-    def forward(self, x: Tensor):
+    def forward(self, x: Tensor) -> Tensor:
         k, q, v = ops.split(ops.reshape(x @ self.w_kqv, (x.shape[0], self.dim, 3)), axis=2)
         atten = self.softmax(k @ q.transpose() / np.sqrt(x.shape[1]))
 
