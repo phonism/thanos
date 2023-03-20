@@ -78,7 +78,7 @@ def train_mnist(
     test_dataset = data.MNISTDataset(test_img_path, test_label_path)
 
     train_dataloader = data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, device=thanos.cuda())
-    test_dataloader = data.DataLoader(test_dataset)
+    test_dataloader = data.DataLoader(test_dataset, device=thanos.cuda())
     model = MLPResNet(784, hidden_dim=hidden_dim)
     model.cuda()
     opt = optimizer(model.parameters(), lr=lr, weight_decay=weight_decay)
