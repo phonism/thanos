@@ -561,20 +561,17 @@ class NDArray:
             view = self.reshape((1,) * (self.ndim - 1) + (prod(self.shape),))
             out = NDArray.make((1,) * (self.ndim if keepdims else 0), device=self.device)
         else:
-            tmp = []
-            axis = self.norm_axis(self, axis)
-            for ax in axis:
-                tmp.append(ax)
-            view = self.permute(
-                tuple([a for a in range(self.ndim) if a not in axis]) + tuple(tmp)
-            )
+            if isinstance(axis, (tuple, list)):
+                assert len(axis) == 1, "Only support reduction over a single axis"
+                axis = axis[0]
+
+            view = self.permute(tuple([a for a in range(self.ndim) if a != axis]) + (axis,))
             out = NDArray.make(
-                    tuple([1 if i in axis else s for i, s in enumerate(self.shape)]) 
-                    if keepdims else
-                    tuple([s for i, s in enumerate(self.shape) if i not in axis]),
-                    device=self.device,
-            )
+                    tuple([1 if i == axis else s for i, s in enumerate(self.shape)])
+                    if keepdims else tuple([s for i, s in enumerate(self.shape) if i != axis]),
+                    device=self.device,)
         return view, out
+        
 
     def sum(self, axis=None, keepdims=False):
         view, out = self.reduce_view_out(axis, keepdims=keepdims)
@@ -635,12 +632,32 @@ def swapaxes(array, x, y):
 def sum(a, axis=None, keepdims=False):
     if type(axis) is int:
         axis = (axis, )
-    return a.sum(axis=axis, keepdims=keepdims)
+    if axis is None:
+        return a.sum(axis=axis, keepdims=keepdims)
+    axis = tuple(sorted(list(axis)))
+    pre = 0
+    for ax in axis:
+        if keepdims:
+            a = a.sum(axis=ax, keepdims=keepdims)
+        else:
+            a = a.sum(axis=ax - pre, keepdims=keepdims)
+        pre += 1
+    return a
 
 def max(a, axis=None, keepdims=False):
     if type(axis) is int:
         axis = (axis, )
-    return a.max(axis=axis, keepdims=keepdims)
+    if axis is None:
+        return a.max(axis=axis, keepdims=keepdims)
+    axis = tuple(sorted(list(axis)))
+    pre = 0
+    for ax in axis:
+        if keepdims:
+            a = a.max(axis=ax, keepdims=keepdims)
+        else:
+            a = a.max(axis=ax - pre, keepdims=keepdims)
+        pre += 1
+    return a
 
 def reshape(array, new_shape):
     return array.reshape(new_shape)

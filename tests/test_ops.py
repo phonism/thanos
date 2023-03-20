@@ -34,8 +34,6 @@ _DEVICES = [
             thanos.cuda(), 
             marks=pytest.mark.skipif(not thanos.cuda().enabled(), reason="No GPU"))]
 
-
-
 EWISE_OPS = {
     "add": lambda a, b: a + b,
     "divide": lambda a, b: a / b,
@@ -208,8 +206,6 @@ def test_stack(shape, axis, l, device):
     for i in range(l):
         np.testing.assert_allclose(TA[i].grad.numpy(), A[i].grad.numpy(), atol=1e-5, rtol=1e-5)
 
-"""
-TODO: TO BE FIXED, summation only one axis
 
 BROADCAST_SHAPES = [
     ((1, 1, 1), (3, 3, 3)),
@@ -228,7 +224,6 @@ def test_broadcast_to(shape, shape_to, device):
     torch.broadcast_to(TA, shape_to).sum().backward()
     thanos.broadcast_to(A, shape_to).sum().backward()
     np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
-"""
 
 RESHAPE_SHAPES = [
     ((1, 1, 1), (1,)),
@@ -287,6 +282,41 @@ def test_logsumexp(shape, axes, device):
     thanos.logsumexp(A, axes).sum().backward()
     np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
 
+# TODO need to flatten the syntax between PyTorch and my code.
+@pytest.mark.parametrize("shape", GENERAL_SHAPES)
+@pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
+def test_equal(shape, device):
+    _A = np.random.randn(*shape).astype(np.float32)
+    _B = np.random.randn(*shape).astype(np.float32)
+    A = thanos.Tensor(_A, device=device)
+    B = thanos.Tensor(_B, device=device)
+    C = thanos.Tensor(_A, device=device)
+    TA = torch.Tensor(_A)
+    TA.requires_grad = True
+    TB = torch.Tensor(_B)
+    TB.requires_grad = True
+    TC = torch.Tensor(_A)
+    TC.requires_grad = True
+    np.testing.assert_allclose((TA == TB).detach().numpy(), thanos.equal(A, B).detach().numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose((TA == TC).detach().numpy(), thanos.equal(A, C).detach().numpy(), atol=1e-5, rtol=1e-5)
+
+@pytest.mark.parametrize("shape, axes", SUMMATION_PARAMETERS)
+@pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
+def test_max(shape, axes, device):
+    _A = np.random.randn(*shape).astype(np.float32)
+    A = thanos.Tensor(_A, device=device)
+    TA = torch.Tensor(_A)
+    TA.requires_grad = True
+    t_axes = axes
+    if axes is None:
+        t_axes = -1
+    np.testing.assert_allclose(
+            torch.max(TA, dim=t_axes)[0].detach().numpy(), 
+            thanos.max(A, axis=axes).detach().numpy(), atol=1e-5, rtol=1e-5)
+
+    torch.max(TA, dim=t_axes)[0].sum().backward()
+    thanos.max(A, axis=axes).sum().backward()
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
 
 if __name__ == "__main__":
     pytest.main()

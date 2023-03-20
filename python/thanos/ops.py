@@ -383,8 +383,8 @@ class Max(TensorOp):
                 new_axis.append(x + len(hs.shape))
         for x in sorted(new_axis):
             grad_shape.insert(x, 1)
-        mask = hs.equal(broadcast_to(max(hs, axis=self.axis), hs.shape))
-        return (broadcast_to(out_grad, hs.shape) * mask).detach()
+        mask = hs.equal(broadcast_to(max(hs, axis=self.axis, keepdims=True), hs.shape))
+        return (broadcast_to(reshape(out_grad, grad_shape), hs.shape) * mask).detach()
 
 def max(a, axis=None, keepdims=False):
     return Max(axis, keepdims)(a)
