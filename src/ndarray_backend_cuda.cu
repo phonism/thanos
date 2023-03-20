@@ -435,7 +435,9 @@ void EwiseTanh(const CudaArray& a, CudaArray* out) {
 ////////////////////////////////////////////////////////////////////////////////
 
 __global__ void MatmulTileKernel(
-        scalar_t* a, scalar_t* b, scalar_t* out, uint32_t M, uint32_t N, uint32_t P) {
+        scalar_t* a, scalar_t* b, scalar_t* out, 
+        uint32_t pre_a, uint32_t pre_b,
+        uint32_t M, uint32_t N, uint32_t P) {
     // Shared memory used to store Asub and Bsub respectively 
     __shared__ scalar_t As[TILE][TILE];
     __shared__ scalar_t Bs[TILE][TILE];
@@ -443,6 +445,7 @@ __global__ void MatmulTileKernel(
     // Block row and column
     size_t bidc = blockIdx.y * TILE;
     size_t bidr = blockIdx.x * TILE;
+    size_t pre = blockIdx.z;
  
     // Accumulate results into Outvalue 
     scalar_t Outvalue = 0;
@@ -457,13 +460,21 @@ __global__ void MatmulTileKernel(
         // Load Asub and Bsub from device memory to shared memory  
         // Each thread loads one element of each sub-matrix  
         if (tidr + bidr < M && tidc + i < N) {
-            As[tidr][tidc] = a[N * (tidr + bidr) + tidc + i];
+            if (pre_a == 1) {
+                As[tidr][tidc] = a[N * (tidr + bidr) + tidc + i];
+            } else {
+                As[tidr][tidc] = a[pre * N * M + N * (tidr + bidr) + tidc + i];
+            }
         } else {
             As[tidr][tidc] = 0;
         }
 
         if (tidr + i < N && tidc + bidc < P) {
-            Bs[tidr][tidc] = b[P * (tidr + i) + tidc + bidc];
+            if (pre_b == 1) {
+                Bs[tidr][tidc] = b[P * (tidr + i) + tidc + bidc];
+            } else {
+                Bs[tidr][tidc] = b[pre * N * P + P * (tidr + i) + tidc + bidc];
+            }
         } else {
             Bs[tidr][tidc] = 0;
         }
@@ -485,12 +496,12 @@ __global__ void MatmulTileKernel(
     // Write Outvalue to device memory  
     // Each thread writes one element 
     if (tidr + bidr < M && tidc + bidc < P) {
-        out[P * (tidr + bidr) + tidc + bidc] = Outvalue;
+        out[pre * M * P + P * (tidr + bidr) + tidc + bidc] = Outvalue;
     }
 }
 
-void Matmul(const CudaArray& a, const CudaArray& b, CudaArray* out, uint32_t M, uint32_t N,
-            uint32_t P) {
+void Matmul(const CudaArray& a, const CudaArray& b, CudaArray* out, 
+        uint32_t pre_a, uint32_t pre_b, uint32_t M, uint32_t N, uint32_t P) {
     /**
      * Multiply two (compact) matrices into an output (also comapct) matrix.  You will want to look
      * at the lecture and notes on GPU-based linear algebra to see how to do this.  Since ultimately
@@ -513,9 +524,13 @@ void Matmul(const CudaArray& a, const CudaArray& b, CudaArray* out, uint32_t M, 
      *   P: columns of b / out
      */
   
+    uint32_t pre_max = pre_a;
+    if (pre_b > pre_a) {
+        pre_max = pre_b;
+    }
     dim3 blockDim(TILE, TILE);
-    dim3 gridDim((M + TILE - 1) / blockDim.x, (P + TILE - 1) / blockDim.y);
-    MatmulTileKernel<<<gridDim, blockDim>>>(a.ptr, b.ptr, out->ptr, M, N, P);
+    dim3 gridDim((M + TILE - 1) / blockDim.x, (P + TILE - 1) / blockDim.y, pre_max);
+    MatmulTileKernel<<<gridDim, blockDim>>>(a.ptr, b.ptr, out->ptr, pre_a, pre_b, M, N, P);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

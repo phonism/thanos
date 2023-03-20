@@ -27,6 +27,8 @@ def test_attention(shape, device):
     TA.requires_grad = True
 
     atten = thanos.nn.Attention()
+    if device == thanos.cuda():
+        atten.cuda()
     atten(A)
 
 SOFTMAX_SHAPES = [
@@ -60,7 +62,10 @@ def test_batchnorm1d(shape, device):
     A = thanos.Tensor(_A, device=device)
     TA = torch.Tensor(_A)
     TA.requires_grad = True
-    C = thanos.nn.BatchNorm1d(shape[1])(A)
+    norm = thanos.nn.BatchNorm1d(shape[1])
+    if device == thanos.cuda():
+        norm.cuda()
+    C = norm(A)
     TC = torch.nn.BatchNorm1d(shape[1])(TA)
     np.testing.assert_allclose(TC.detach().numpy(), C.detach().numpy(), atol=1e-5, rtol=1e-5)
 
