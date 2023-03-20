@@ -119,6 +119,28 @@ def test_matmul(m, n, p, device):
     np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
     np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
 
+BATCH_MATMUL_DIMS = [
+    (16, 16, 16, 16),
+    (32, 16, 8, 24),
+]
+@pytest.mark.parametrize("b,m,n,p", BATCH_MATMUL_DIMS)
+@pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
+def test_batch_matmul(b, m, n, p, device):
+    _A = np.random.randn(b, m, n).astype(np.float32)
+    _B = np.random.randn(b, n, p).astype(np.float32)
+    A = thanos.Tensor(_A, device=device)
+    B = thanos.Tensor(_B, device=device)
+    TA = torch.Tensor(_A)
+    TA.requires_grad=True
+    TB = torch.Tensor(_B)
+    TB.requires_grad=True
+    np.testing.assert_allclose((TA @ TB).detach().numpy(), (A @ B).detach().numpy(), atol=1e-5, rtol=1e-5)
+
+    (TA @ TB).sum().backward()
+    (A @ B).sum().backward()
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+
 SUMMATION_PARAMETERS = [
     ((1, 1, 1), None),
     ((5, 3), 0),
