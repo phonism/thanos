@@ -621,15 +621,6 @@ class NDArray:
             raise ValueError()
 
 
-    def norm_axis(self, a, axis):
-        if type(axis) is int:
-            axis = (axis,)
-        new_axis = []
-        for ax in axis:
-            if ax < 0:
-                ax = ax + len(a.shape)
-            new_axis.append(ax)
-        return tuple(new_axis)
 
     ### Reductions, i.e., sum/max over all element or over given axis
     def reduce_view_out(self, axis, keepdims=False):
@@ -706,11 +697,23 @@ def swapaxes(array, x, y):
     new_shape[y] = x
     return array.permute(tuple(new_shape))
 
+def norm_axis(a, axis):
+    if type(axis) is int:
+        axis = (axis,)
+    new_axis = []
+    for ax in axis:
+        if ax < 0:
+            ax = ax + len(a.shape)
+        new_axis.append(ax)
+    return tuple(new_axis)
+
 def sum(a, axis=None, keepdims=False):
     if type(axis) is int:
         axis = (axis, )
     if axis is None:
         return a.sum(axis=axis, keepdims=keepdims)
+    axis = norm_axis(a, axis)
+    axis = tuple(sorted(list(axis)))
     pre = 0
     for ax in axis:
         if keepdims:
@@ -725,6 +728,7 @@ def max(a, axis=None, keepdims=False):
         axis = (axis, )
     if axis is None:
         return a.max(axis=axis, keepdims=keepdims)
+    axis = norm_axis(a, axis)
     axis = tuple(sorted(list(axis)))
     pre = 0
     for ax in axis:
