@@ -337,7 +337,7 @@ void EwiseTanh(const AlignedArray& a, AlignedArray* out) {
 /// END YOUR SOLUTION
 
 void Matmul(const AlignedArray& a, const AlignedArray& b, AlignedArray* out, 
-        uint32_t m, uint32_t n, uint32_t p) {
+        uint32_t pre_a, uint32_t pre_b, uint32_t m, uint32_t n, uint32_t p) {
     /**
      * Multiply two (compact) matrices into an output (also compact) matrix.  For this implementation
      * you can use the "naive" three-loop algorithm.
@@ -350,36 +350,14 @@ void Matmul(const AlignedArray& a, const AlignedArray& b, AlignedArray* out,
      *   n: columns of a / rows of b
      *   p: columns of b / out
      */
-    for (size_t i = 0; i < m; ++i) {
-        for (size_t j = 0; j < p; ++j) {
-            out->ptr[i * p + j] = 0;
-            for (size_t k = 0; k < n; ++k) {
-                out->ptr[i * p + j] += (a.ptr[i * n + k] * b.ptr[k * p + j]);
-            }
-        }
-    }
-}
-
-void BatchMatmul(const AlignedArray& a, const AlignedArray& b, AlignedArray* out, 
-        uint32_t bs, uint32_t m, uint32_t n, uint32_t p) {
-    /**
-     * Multiply two (compact) matrices into an output (also compact) matrix.  For this implementation
-     * you can use the "naive" three-loop algorithm.
-     *
-     * Args:
-     *   a: compact 2D array of size m x n
-     *   b: compact 2D array of size n x p
-     *   out: compact 2D array of size m x p to write the output to
-     *   m: rows of a / out
-     *   n: columns of a / rows of b
-     *   p: columns of b / out
-     */
-    for (size_t l = 0; l < bs; ++l) {
+    for (size_t l = 0; l < std::max(pre_a, pre_b); ++l) {
         for (size_t i = 0; i < m; ++i) {
             for (size_t j = 0; j < p; ++j) {
                 out->ptr[l * m * p + i * p + j] = 0;
                 for (size_t k = 0; k < n; ++k) {
-                    out->ptr[l * m * p + i * p + j] += (a.ptr[l * m * n + i * n + k] * b.ptr[l * n * p + k * p + j]);
+                    size_t aa = (pre_a == 1 ? 0 : l);
+                    size_t bb = (pre_b == 1 ? 0 : l);
+                    out->ptr[l * m * p + i * p + j] += (a.ptr[aa * m * n + i * n + k] * b.ptr[bb * n * p + k * p + j]);
                 }
             }
         }
@@ -419,7 +397,7 @@ inline void AlignedDot(
 }
 
 void MatmulTiled(const AlignedArray& a, const AlignedArray& b, AlignedArray* out, 
-        uint32_t m, uint32_t n, uint32_t p) {
+        uint32_t pre_a, uint32_t pre_b, uint32_t m, uint32_t n, uint32_t p) {
     /**
      * Matrix multiplication on tiled representations of array.  In this setting, a, b, and out
      * are all *4D* compact arrays of the appropriate size, e.g. a is an array of size
@@ -439,6 +417,41 @@ void MatmulTiled(const AlignedArray& a, const AlignedArray& b, AlignedArray* out
      *   p: columns of b / out
      *
      */
+    for (size_t lb = 0; lb < std::max(pre_a, pre_b); ++lb) {
+        for (size_t i = 0; i < m / TILE; ++i) {
+            scalar_t A[TILE * n];
+            for (size_t ii = 0; ii < n / TILE; ++ii) {
+                for (size_t jj = 0; jj < TILE * TILE; ++jj) {
+                    size_t aa = (pre_a == 1 ? 0 : lb);
+                    A[ii * TILE * TILE + jj] = a.ptr[aa * m * n + i * n * TILE + ii * TILE * TILE + jj];
+                }
+            }
+            for (size_t j = 0; j < p / TILE; ++j) {
+                scalar_t B[TILE * n];
+                for (size_t ii = 0; ii < n / TILE; ++ii) {
+                    for (size_t jj = 0; jj < TILE * TILE; ++jj) {
+                        size_t bb = (pre_b == 1 ? 0 : lb);
+                        B[ii * TILE * TILE + jj] = b.ptr[bb * n * p + j * TILE * TILE + ii * TILE * p + jj];
+                    }
+                }
+                for (int k = 0; k < TILE; ++k) {
+                    for (int l = 0; l < TILE; ++l) {
+                        out->ptr[lb * m * p + i * p * TILE + j * TILE * TILE + k * TILE + l] = 0;
+                    }
+                }
+                for (int k = 0; k < n / TILE; ++k) {
+                    scalar_t C[TILE * TILE];
+                    for (size_t ii = 0; ii < TILE * TILE; ++ii) {
+                        C[ii] = 0;
+                    }
+                    AlignedDot(&A[k * TILE * TILE], &B[k * TILE * TILE], C);
+                    for (size_t ii = 0; ii < TILE * TILE; ++ii) {
+                        out->ptr[lb * m * p + i * p * TILE + j * TILE * TILE + ii] += C[ii];
+                    }
+                }
+            }
+        }
+    }
     for (size_t i = 0; i < m / TILE; ++i) {
         scalar_t A[TILE * n];
         for (size_t ii = 0; ii < n / TILE; ++ii) {
@@ -472,61 +485,6 @@ void MatmulTiled(const AlignedArray& a, const AlignedArray& b, AlignedArray* out
     }
 }
 
-void BatchMatmulTiled(const AlignedArray& a, const AlignedArray& b, AlignedArray* out, 
-        uint32_t bz, uint32_t m, uint32_t n, uint32_t p) {
-    /**
-     * Matrix multiplication on tiled representations of array.  In this setting, a, b, and out
-     * are all *4D* compact arrays of the appropriate size, e.g. a is an array of size
-     *   a[m/TILE][n/TILE][TILE][TILE]
-     * You should do the multiplication tile-by-tile to improve performance of the array (i.e., this
-     * function should call `AlignedDot()` implemented above).
-     *
-     * Note that this function will only be called when m, n, p are all multiples of TILE, so you can
-     * assume that this division happens without any remainder.
-     *
-     * Args:
-     *   a: compact 4D array of size m/TILE x n/TILE x TILE x TILE
-     *   b: compact 4D array of size n/TILE x p/TILE x TILE x TILE
-     *   out: compact 4D array of size m/TILE x p/TILE x TILE x TILE to write to
-     *   m: rows of a / out
-     *   n: columns of a / rows of b
-     *   p: columns of b / out
-     *
-     */
-    for (size_t lb = 0; lb < bz; ++lb) {
-        for (size_t i = 0; i < m / TILE; ++i) {
-            scalar_t A[TILE * n];
-            for (size_t ii = 0; ii < n / TILE; ++ii) {
-                for (size_t jj = 0; jj < TILE * TILE; ++jj) {
-                    A[ii * TILE * TILE + jj] = a.ptr[lb * m * n + i * n * TILE + ii * TILE * TILE + jj];
-                }
-            }
-            for (size_t j = 0; j < p / TILE; ++j) {
-                scalar_t B[TILE * n];
-                for (size_t ii = 0; ii < n / TILE; ++ii) {
-                    for (size_t jj = 0; jj < TILE * TILE; ++jj) {
-                        B[ii * TILE * TILE + jj] = b.ptr[lb * n * p + j * TILE * TILE + ii * TILE * p + jj];
-                    }
-                }
-                for (int k = 0; k < TILE; ++k) {
-                    for (int l = 0; l < TILE; ++l) {
-                        out->ptr[lb * m * p + i * p * TILE + j * TILE * TILE + k * TILE + l] = 0;
-                    }
-                }
-                for (int k = 0; k < n / TILE; ++k) {
-                    scalar_t C[TILE * TILE];
-                    for (size_t ii = 0; ii < TILE * TILE; ++ii) {
-                        C[ii] = 0;
-                    }
-                    AlignedDot(&A[k * TILE * TILE], &B[k * TILE * TILE], C);
-                    for (size_t ii = 0; ii < TILE * TILE; ++ii) {
-                        out->ptr[lb * m * p + i * p * TILE + j * TILE * TILE + ii] += C[ii];
-                    }
-                }
-            }
-        }
-    }
-}
 
 void ReduceMax(const AlignedArray& a, AlignedArray* out, size_t reduce_size) {
     /**
@@ -653,9 +611,7 @@ PYBIND11_MODULE(ndarray_backend_cpu, m) {
     m.def("ewise_exp", EwiseExp);
     m.def("ewise_tanh", EwiseTanh);
     m.def("matmul", Matmul);
-    m.def("bmm", BatchMatmul);
     m.def("matmul_tiled", MatmulTiled);
-    m.def("batch_matmul_tiled", BatchMatmulTiled);
     m.def("reduce_max", ReduceMax);
     m.def("reduce_sum", ReduceSum);
     m.def("diag", Diag);

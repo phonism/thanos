@@ -417,6 +417,8 @@ class Split(TensorTupleOp):
         self.axis = axis
 
     def compute(self, x):
+        if self.axis < 0:
+            self.axis = self.axis + len(x.shape)
         in_shape = x.shape
         idx = [slice(None, None, None) for j in range(len(in_shape))]
         results = []

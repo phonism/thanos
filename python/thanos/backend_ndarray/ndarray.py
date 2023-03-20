@@ -525,7 +525,7 @@ class NDArray:
                 a = tile(self.compact(), t).compact()
                 b = tile(other.compact(), t).compact()
                 out = NDArray.make((a.shape[0], b.shape[1], t, t), device=self.device)
-                self.device.matmul_tiled(a._handle, b._handle, out._handle, m, n, p)
+                self.device.matmul_tiled(a._handle, b._handle, out._handle, 1, 1, m, n, p)
     
                 return (
                     out.permute((0, 2, 1, 3))
@@ -536,12 +536,12 @@ class NDArray:
             else:
                 out = NDArray.make((m, p), device=self.device)
                 self.device.matmul(
-                        self.compact()._handle, other.compact()._handle, out._handle, m, n, p
+                        self.compact()._handle, other.compact()._handle, out._handle, 1, 1, m, n, p
                 )
                 return out
         elif self.ndim == 3 and other.ndim == 3 and self.shape[2] == other.shape[1] and self.shape[0] == other.shape[0]:
             bz, m, n, p = self.shape[0], self.shape[1], self.shape[2], other.shape[2]
-            if hasattr(self.device, "batch_matmul_tiled") and all(d % self.device.__tile_size__ == 0 for d in (m, n, p)):
+            if hasattr(self.device, "matmul_tiled") and all(d % self.device.__tile_size__ == 0 for d in (m, n, p)):
                 def tile(a, tile):
                     return a.as_strided(
                         (a.shape[0], a.shape[1] // tile, a.shape[2] // tile, tile, tile),
@@ -552,7 +552,7 @@ class NDArray:
                 a = tile(self.compact(), t).compact()
                 b = tile(other.compact(), t).compact()
                 out = NDArray.make((a.shape[0], a.shape[1], b.shape[2], t, t), device=self.device)
-                self.device.batch_matmul_tiled(a._handle, b._handle, out._handle, bz, m, n, p)
+                self.device.matmul_tiled(a._handle, b._handle, out._handle, bz, bz, m, n, p)
     
                 return (
                     out.permute((0, 1, 3, 2, 4))
@@ -560,9 +560,61 @@ class NDArray:
                     .reshape((self.shape[0], self.shape[1], other.shape[2]))
                 )
             else:
-                out = NDArray.make((b, m, p), device=self.device)
-                self.device.bmm(
-                        self.compact()._handle, other.compact()._handle, out._handle, b, m, n, p
+                out = NDArray.make((bz, m, p), device=self.device)
+                self.device.matmul(
+                        self.compact()._handle, other.compact()._handle, out._handle, bz, bz, m, n, p
+                )
+                return out
+        elif self.ndim == 3 and other.ndim == 2 and self.shape[2] == other.shape[0]:
+            bz, m, n, p = self.shape[0], self.shape[1], self.shape[2], other.shape[1]
+            if hasattr(self.device, "matmul_tiled") and all(d % self.device.__tile_size__ == 0 for d in (m, n, p)):
+                t = self.device.__tile_size__
+                a = self.compact().as_strided(
+                        (self.shape[0], self.shape[1] // t, self.shape[2] // t, t, t),
+                        (self.shape[1] * self.shape[2], self.shape[2] * t, t, self.shape[2], 1),
+                ).compact()
+                b = other.compact().as_strided(
+                        (1, other.shape[0] // t, other.shape[1] // t, t, t),
+                        (other.shape[0] * other.shape[1], other.shape[1] * t, t, other.shape[1], 1),
+                ).compact()
+                out = NDArray.make((a.shape[0], a.shape[1], b.shape[2], t, t), device=self.device)
+                self.device.matmul_tiled(a._handle, b._handle, out._handle, bz, 1, m, n, p)
+    
+                return (
+                    out.permute((0, 1, 3, 2, 4))
+                    .compact()
+                    .reshape((self.shape[0], self.shape[1], other.shape[1]))
+                )
+            else:
+                out = NDArray.make((bz, m, p), device=self.device)
+                self.device.matmul(
+                        self.compact()._handle, other.compact()._handle, out._handle, bz, 1, m, n, p
+                )
+                return out
+        elif self.ndim == 2 and other.ndim == 3 and self.shape[1] == other.shape[1]:
+            bz, m, n, p = other.shape[0], self.shape[0], self.shape[1], other.shape[2]
+            if hasattr(self.device, "matmul_tiled") and all(d % self.device.__tile_size__ == 0 for d in (m, n, p)):
+                t = self.device.__tile_size__
+                a = self.compact().as_strided(
+                        (1, self.shape[0] // t, self.shape[1] // t, t, t),
+                        (self.shape[0] * self.shape[1], self.shape[1] * t, t, self.shape[1], 1),
+                ).compact()
+                b = other.compact().as_strided(
+                        (other.shape[0], other.shape[1] // t, other.shape[2] // t, t, t),
+                        (other.shape[1] * other.shape[2], other.shape[2] * t, t, other.shape[2], 1),
+                ).compact()
+                out = NDArray.make((b.shape[0], a.shape[1], b.shape[2], t, t), device=self.device)
+                self.device.matmul_tiled(a._handle, b._handle, out._handle, 1, bz, m, n, p)
+    
+                return (
+                    out.permute((0, 1, 3, 2, 4))
+                    .compact()
+                    .reshape((bz, m, p))
+                )
+            else:
+                out = NDArray.make((bz, m, p), device=self.device)
+                self.device.matmul(
+                        self.compact()._handle, other.compact()._handle, out._handle, 1, bz, m, n, p
                 )
                 return out
         else:
@@ -659,7 +711,6 @@ def sum(a, axis=None, keepdims=False):
         axis = (axis, )
     if axis is None:
         return a.sum(axis=axis, keepdims=keepdims)
-    axis = tuple(sorted(list(axis)))
     pre = 0
     for ax in axis:
         if keepdims:

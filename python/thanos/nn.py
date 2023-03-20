@@ -219,6 +219,7 @@ class Attention(Module):
         self.softmax = Softmax()
 
     def forward(self, x: Tensor) -> Tensor:
-        k, q, v = ops.split(ops.reshape(x @ self.w_kqv, (x.shape[0], self.dim, 3)), axis=2)
+        k, q, v = ops.split(ops.reshape(x @ self.w_kqv, (x.shape[0], x.shape[1], self.dim, 3)), axis=-1)
         atten = self.softmax(k @ q.transpose() / np.sqrt(x.shape[1]))
+        return atten
 
