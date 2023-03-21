@@ -84,8 +84,6 @@ def test_attention(shape, device):
     TA.requires_grad = True
 
     attn = thanos.nn.Attention()
-    if device == thanos.cuda():
-        attn.cuda()
     #attn(A)
 
     torch_attn = torch.nn.MultiheadAttention(shape[2], 1, bias=False, batch_first=True)
@@ -93,6 +91,8 @@ def test_attention(shape, device):
     attn.w_out = thanos.nn.Parameter(torch_attn.out_proj.weight.detach().numpy().T)
     M = torch.triu(-float("inf") * torch.ones(shape[1], shape[1]), 1)
 
+    if device == thanos.cuda():
+        attn.cuda()
     thanos_out = attn(A)
     torch_out = torch_attn(TA, TA, TA, attn_mask=M)
 
@@ -118,14 +118,14 @@ def test_multihead_attention(shape, device):
     TA.requires_grad = True
 
     attn = thanos.nn.MultiheadAttention(dim=shape[2], heads=4)
-    if device == thanos.cuda():
-        attn.cuda()
 
     torch_attn = torch.nn.MultiheadAttention(shape[2], 4, bias=False, batch_first=True)
     attn.w_kqv = thanos.nn.Parameter(torch_attn.in_proj_weight.detach().numpy().T)
     attn.w_out = thanos.nn.Parameter(torch_attn.out_proj.weight.detach().numpy().T)
     M = torch.triu(-float("inf") * torch.ones(shape[1], shape[1]), 1)
 
+    if device == thanos.cuda():
+        attn.cuda()
     thanos_out = attn(A)
     torch_out = torch_attn(TA, TA, TA, attn_mask=M)
 

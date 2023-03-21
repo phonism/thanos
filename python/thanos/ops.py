@@ -41,7 +41,7 @@ class TupleGetItem(TensorOp):
         in_grad = []
         for i, value in enumerate(node.inputs[0]):
             if i != index:
-                in_grad.append(init.zeros(*value.shape))
+                in_grad.append(init.zeros(*value.shape, device=out_grad.device))
             else:
                 in_grad.append(out_grad)
         return MakeTensorTuple()(*in_grad)

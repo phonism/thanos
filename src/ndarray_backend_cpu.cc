@@ -566,12 +566,15 @@ void Diag(const AlignedArray& a, AlignedArray* out, std::vector<uint32_t>& shape
  *   a: compact array of size a.size = out.size * reduce_size to reduce over
  *   out: compact array to write into
  */
-void Triu(const AlignedArray& a, std::vector<uint32_t>& shape, std::vector<uint32_t>& strides, int k) {
+void Triu(const AlignedArray& a, AlignedArray* out, std::vector<uint32_t>& shape, std::vector<uint32_t>& strides, int k) {
     for (int i = 0; i < shape[0]; ++i) {
         for (int j = 0; j < shape[1]; ++j) {
             if (i - j > -k) {
-                a.ptr[i * strides[0] + j] = 0;
+                out->ptr[i * strides[0] + j] = 0;
+            } else {
+                out->ptr[i * strides[0] + j] = a.ptr[i * strides[0] + j];
             }
+
         }
     }
 }

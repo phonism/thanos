@@ -592,6 +592,36 @@ void ReduceSum(const CudaArray& a, CudaArray* out, size_t reduce_size) {
     ReduceSumKernel<<<dim.grid, dim.block>>>(a.ptr, out->ptr, out->size, reduce_size);
 }
 
+__global__ void TriuKernel(
+        size_t size, const scalar_t* a, scalar_t* out, size_t k) {
+    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < size) {
+        for (int j = 0; j < size; ++j) {
+            if (i + k > j) {
+                out[i * size + j] = 0;
+            } else {
+                out[i * size + j] = a[i * size + j];
+            }
+        }
+    }
+}
+
+void Triu(const CudaArray& a, CudaArray* out, std::vector<uint32_t> shape, std::vector<uint32_t> strides, size_t k) {
+    /**
+     * Set items in a (non-compact) array using CUDA.  Yyou will most likely want to implement a
+     * EwiseSetitemKernel() function, similar to those above, that will do the actual work.
+     * 
+     * Args:
+     *   a: _compact_ array whose items will be written to out
+     *   out: non-compact array whose items are to be written
+     *   shape: shapes of each dimension for a and out
+     *   strides: strides of the *out* array (not a, which has compact strides)
+     *   offset: offset of the *out* array (not a, which has zero offset, being compact)
+     */
+    CudaDims dim = CudaOneDim(shape[0]);
+    TriuKernel<<<dim.grid, dim.block>>>(shape[0], a.ptr, out->ptr, k);
+}
+
 }  // namespace cuda
 }  // namespace needle
 
@@ -659,5 +689,6 @@ PYBIND11_MODULE(ndarray_backend_cuda, m) {
     
     m.def("reduce_max", ReduceMax);
     m.def("reduce_sum", ReduceSum);
+    m.def("triu", Triu);
 }
 

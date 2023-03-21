@@ -382,7 +382,6 @@ def compute_gradient_of_variables(out_tensor, out_grad):
         for nd in node.inputs:
             if nd not in node_to_output_grads_list:
                 node_to_output_grads_list[nd] = []
-        # 对于非叶子节点，将梯度传导到inputs上
         if not node.is_leaf():
             grad = node.op.gradient_as_tuple(node.grad, node)
             for i, nd in enumerate(node.inputs):

@@ -615,8 +615,9 @@ class NDArray:
         return out
     
     def triu(self, k=0):
-        self.device.triu(self._handle, self.shape, self.strides, k)
-        return self
+        out = NDArray.make(self.shape, device=self.device)
+        self.device.triu(self._handle, out._handle, self.shape, self.strides, k)
+        return out
 
 def array(a, dtype="float32", device=None):
     """ Convenience methods to match numpy a bit more closely."""

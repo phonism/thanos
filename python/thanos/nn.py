@@ -97,6 +97,8 @@ class Module:
             self.parameters()[idx].set_device()
         for idx in range(len(self.vars())):
             self.vars()[idx].set_device()
+        for idx in range(len(self._children())):
+            self._children()[idx].cuda()
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
@@ -227,7 +229,7 @@ class Attention(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         k, q, v = ops.split(ops.reshape(x @ self.w_kqv, (x.shape[0], x.shape[1], 3, self.dim)), axis=2)
-        mask = thanos.triu((-float("inf") * init.ones(x.shape[1], x.shape[1])), k=1)
+        mask = thanos.triu((-float("inf") * init.ones(x.shape[1], x.shape[1], device=x.device)), k=1)
         mask = ops.broadcast_to(ops.reshape(mask, (1,) + mask.shape), (x.shape[0],) + mask.shape)
         atten = self.softmax(k @ ops.transpose(q) / np.sqrt(x.shape[2]) + mask)
         return atten @ v @ self.w_out, atten
@@ -247,7 +249,7 @@ class MultiheadAttention(Module):
     def forward(self, x: Tensor) -> Tensor:
         k, q, v = ops.split(ops.reshape(x @ self.w_kqv, (x.shape[0], x.shape[1], 3, self.dim)), axis=2)
         k, q, v = [ops.reshape(a, (x.shape[0], x.shape[1], self.heads, self.dim // self.heads)).transpose((1, 2)) for a in [k, q, v]]
-        mask = thanos.triu((-float("inf") * init.ones(x.shape[1], x.shape[1])), k=1)
+        mask = thanos.triu((-float("inf") * init.ones(x.shape[1], x.shape[1], device=x.device)), k=1)
         mask = ops.broadcast_to(ops.reshape(mask, (1, 1,) + mask.shape), (k.shape[0], k.shape[1],) + mask.shape)
         atten = self.softmax(k @ ops.transpose(q) / np.sqrt(self.dim // self.heads) + mask)
         return ops.reshape((atten @ v).transpose((1, 2)), (x.shape[0], x.shape[1], self.dim)) @ self.w_out, atten
