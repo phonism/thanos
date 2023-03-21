@@ -14,22 +14,6 @@ _DEVICES = [
             thanos.cuda(), 
             marks=pytest.mark.skipif(not thanos.cuda().enabled(), reason="No GPU"))]
 
-ATTENTION_SHAPES = [
-    (8, 32, 64),
-    (8, 32, 64),
-]
-@pytest.mark.parametrize("shape", ATTENTION_SHAPES)
-@pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
-def test_attention(shape, device):
-    _A = np.random.randn(*shape).astype(np.float32)
-    A = thanos.Tensor(_A, device=device)
-    TA = torch.Tensor(_A)
-    TA.requires_grad = True
-
-    atten = thanos.nn.Attention()
-    if device == thanos.cuda():
-        atten.cuda()
-    atten(A)
 
 SOFTMAX_SHAPES = [
         (8, 64),
@@ -86,6 +70,72 @@ def test_relu(shape, device):
 
     C.sum().backward()
     TC.sum().backward()
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+
+ATTENTION_SHAPES = [
+    (8, 32, 64),
+]
+@pytest.mark.parametrize("shape", ATTENTION_SHAPES)
+@pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
+def test_attention(shape, device):
+    _A = np.random.randn(*shape).astype(np.float32)
+    A = thanos.Tensor(_A, device=device)
+    TA = torch.Tensor(_A)
+    TA.requires_grad = True
+
+    attn = thanos.nn.Attention()
+    if device == thanos.cuda():
+        attn.cuda()
+    #attn(A)
+
+    torch_attn = torch.nn.MultiheadAttention(shape[2], 1, bias=False, batch_first=True)
+    attn.w_kqv = thanos.nn.Parameter(torch_attn.in_proj_weight.detach().numpy().T)
+    attn.w_out = thanos.nn.Parameter(torch_attn.out_proj.weight.detach().numpy().T)
+    M = torch.triu(-float("inf") * torch.ones(shape[1], shape[1]), 1)
+
+    thanos_out = attn(A)
+    torch_out = torch_attn(TA, TA, TA, attn_mask=M)
+
+    np.testing.assert_allclose(
+            thanos_out[0].detach().numpy(), 
+            torch_out[0].detach().numpy(), 
+            atol=1e-5, rtol=1e-5)
+
+    thanos_out[0].sum().backward()
+    torch_out[0].sum().backward()
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+
+
+ATTENTION_SHAPES = [
+    (8, 32, 64),
+]
+@pytest.mark.parametrize("shape", ATTENTION_SHAPES)
+@pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
+def test_multihead_attention(shape, device):
+    _A = np.random.randn(*shape).astype(np.float32)
+    A = thanos.Tensor(_A, device=device)
+    TA = torch.Tensor(_A)
+    TA.requires_grad = True
+
+    attn = thanos.nn.MultiheadAttention(dim=shape[2], heads=4)
+    if device == thanos.cuda():
+        attn.cuda()
+
+    torch_attn = torch.nn.MultiheadAttention(shape[2], 4, bias=False, batch_first=True)
+    attn.w_kqv = thanos.nn.Parameter(torch_attn.in_proj_weight.detach().numpy().T)
+    attn.w_out = thanos.nn.Parameter(torch_attn.out_proj.weight.detach().numpy().T)
+    M = torch.triu(-float("inf") * torch.ones(shape[1], shape[1]), 1)
+
+    thanos_out = attn(A)
+    torch_out = torch_attn(TA, TA, TA, attn_mask=M)
+
+    np.testing.assert_allclose(
+            thanos_out[0].detach().numpy(), 
+            torch_out[0].detach().numpy(), 
+            atol=1e-5, rtol=1e-5)
+
+    thanos_out[0].sum().backward()
+    torch_out[0].sum().backward()
     np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
 
 

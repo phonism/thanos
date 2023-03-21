@@ -7,6 +7,7 @@ import thanos
 from thanos.autograd import Tensor
 from thanos import ops
 from thanos import init
+import thanos.backend_ndarray as nd
 import numpy as np
 
 class Parameter(Tensor):
@@ -214,15 +215,39 @@ class Softmax(Module):
 
 
 class Attention(Module):
-    def __init__(self, device=None, dtype="float32"):
-        self.dim = 64
+    def __init__(self, dim=64, device=None, dtype="float32"):
+        self.dim = dim
         self.w_kqv = Parameter(
                 init.kaiming_uniform(self.dim, self.dim * 3),
+                device=device, dtype=dtype)
+        self.w_out = Parameter(
+                init.kaiming_uniform(self.dim, self.dim),
                 device=device, dtype=dtype)
         self.softmax = Softmax()
 
     def forward(self, x: Tensor) -> Tensor:
-        k, q, v = ops.split(ops.reshape(x @ self.w_kqv, (x.shape[0], x.shape[1], self.dim, 3)), axis=-1)
-        atten = self.softmax(k @ q.transpose() / np.sqrt(x.shape[1]))
-        return atten
+        k, q, v = ops.split(ops.reshape(x @ self.w_kqv, (x.shape[0], x.shape[1], 3, self.dim)), axis=2)
+        mask = thanos.triu((-float("inf") * init.ones(x.shape[1], x.shape[1])), k=1)
+        mask = ops.broadcast_to(ops.reshape(mask, (1,) + mask.shape), (x.shape[0],) + mask.shape)
+        atten = self.softmax(k @ ops.transpose(q) / np.sqrt(x.shape[2]) + mask)
+        return atten @ v @ self.w_out, atten
 
+class MultiheadAttention(Module):
+    def __init__(self, dim=64, heads=1, device=None, dtype="float32"):
+        self.dim = dim
+        self.heads = heads
+        self.w_kqv = Parameter(
+                init.kaiming_uniform(self.dim, self.dim * 3),
+                device=device, dtype=dtype)
+        self.w_out = Parameter(
+                init.kaiming_uniform(self.dim, self.dim),
+                device=device, dtype=dtype)
+        self.softmax = Softmax()
+
+    def forward(self, x: Tensor) -> Tensor:
+        k, q, v = ops.split(ops.reshape(x @ self.w_kqv, (x.shape[0], x.shape[1], 3, self.dim)), axis=2)
+        k, q, v = [ops.reshape(a, (x.shape[0], x.shape[1], self.heads, self.dim // self.heads)).transpose((1, 2)) for a in [k, q, v]]
+        mask = thanos.triu((-float("inf") * init.ones(x.shape[1], x.shape[1])), k=1)
+        mask = ops.broadcast_to(ops.reshape(mask, (1, 1,) + mask.shape), (k.shape[0], k.shape[1],) + mask.shape)
+        atten = self.softmax(k @ ops.transpose(q) / np.sqrt(self.dim // self.heads) + mask)
+        return ops.reshape((atten @ v).transpose((1, 2)), (x.shape[0], x.shape[1], self.dim)) @ self.w_out, atten

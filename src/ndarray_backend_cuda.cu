@@ -11,7 +11,7 @@ namespace cuda {
 
 #define BASE_THREAD_NUM 256
 #define TILE 4
-typedef double scalar_t;
+typedef float scalar_t;
 const size_t ELEM_SIZE = sizeof(scalar_t);
 
 __device__ scalar_t ADD(scalar_t a, scalar_t b) {return a + b;}

@@ -4,6 +4,7 @@ from numbers import Number
 from typing import Optional, List
 import numpy
 from .autograd import TensorOp, NDArray, Tensor, TensorTuple, TensorTupleOp, Value
+from thanos import init
 
 # NOTE: we will numpy as the array_api
 # to backup our computations, this line will change in later homeworks
@@ -40,7 +41,7 @@ class TupleGetItem(TensorOp):
         in_grad = []
         for i, value in enumerate(node.inputs[0]):
             if i != index:
-                in_grad.append(init.zeros_like(value))
+                in_grad.append(init.zeros(*value.shape))
             else:
                 in_grad.append(out_grad)
         return MakeTensorTuple()(*in_grad)
@@ -278,7 +279,35 @@ def summation(a, axis=None, keepdims=False):
 
 class Matmul(TensorOp):
     def compute(self, a, b):
-        return a @ b
+        a_shape = a.shape
+        b_shape = b.shape
+        pre_shape_a = []
+        pre_shape_b = []
+        pre_a = 1
+        pre_b = 1
+        if len(a_shape) > 2 or len(b_shape) > 2:
+            for i in range(len(a_shape) - 2):
+                pre_shape_a.append(a_shape[i])
+                pre_a *= a_shape[i]
+            a = array_api.reshape(a, (pre_a, a_shape[-2], a_shape[-1]))
+            for i in range(len(b_shape) - 2):
+                pre_shape_b.append(b_shape[i])
+                pre_b *= b_shape[i]
+            b = array_api.reshape(b, (pre_b, b_shape[-2], b_shape[-1]))
+
+            if pre_a == 1:
+                a = array_api.broadcast_to(a, (b.shape[0], a.shape[1], a.shape[2]))
+            if pre_b == 1:
+                b = array_api.broadcast_to(b, (a.shape[0], b.shape[1], b.shape[2]))
+
+
+        c = a @ b
+        if len(a_shape) > 2 or len(b_shape) > 2:
+            if pre_a >= pre_b:
+                c = array_api.reshape(c, tuple(pre_shape_a) + (a_shape[-2], b_shape[-1]))
+            else:
+                c = array_api.reshape(c, tuple(pre_shape_b) + (a_shape[-2], b_shape[-1]))
+        return c
 
     def gradient(self, out_grad: Tensor, node: Tensor):
         lhs, rhs = node.inputs

@@ -11,7 +11,7 @@ namespace cpu {
 
 #define ALIGNMENT 256
 #define TILE 8
-typedef double scalar_t;
+typedef float scalar_t;
 const size_t ELEM_SIZE = sizeof(scalar_t);
 
 /**
@@ -357,7 +357,7 @@ void Matmul(const AlignedArray& a, const AlignedArray& b, AlignedArray* out,
                 for (size_t k = 0; k < n; ++k) {
                     size_t aa = (pre_a == 1 ? 0 : l);
                     size_t bb = (pre_b == 1 ? 0 : l);
-                    out->ptr[l * m * p + i * p + j] += (a.ptr[aa * m * n + i * n + k] * b.ptr[bb * n * p + k * p + j]);
+                    out->ptr[l * m * p + i * p + j] += a.ptr[aa * m * n + i * n + k] * b.ptr[bb * n * p + k * p + j];
                 }
             }
         }
@@ -559,6 +559,23 @@ void Diag(const AlignedArray& a, AlignedArray* out, std::vector<uint32_t>& shape
     }
 }
 
+/**
+ * return triu
+ *
+ * Args:
+ *   a: compact array of size a.size = out.size * reduce_size to reduce over
+ *   out: compact array to write into
+ */
+void Triu(const AlignedArray& a, std::vector<uint32_t>& shape, std::vector<uint32_t>& strides, int k) {
+    for (int i = 0; i < shape[0]; ++i) {
+        for (int j = 0; j < shape[1]; ++j) {
+            if (i - j > -k) {
+                a.ptr[i * strides[0] + j] = 0;
+            }
+        }
+    }
+}
+
 }  // namespace cpu
 }  // namespace thanos
 
@@ -615,4 +632,5 @@ PYBIND11_MODULE(ndarray_backend_cpu, m) {
     m.def("reduce_max", ReduceMax);
     m.def("reduce_sum", ReduceSum);
     m.def("diag", Diag);
+    m.def("triu", Triu);
 }

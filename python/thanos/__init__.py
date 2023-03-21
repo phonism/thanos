@@ -6,3 +6,4 @@ from . import init
 from . import optim
 from . import data
 from .backend_selection import *
+from .functional import *
