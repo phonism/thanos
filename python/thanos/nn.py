@@ -216,24 +216,6 @@ class Softmax(Module):
         return x
 
 
-class Attention(Module):
-    def __init__(self, dim=64, device=None, dtype="float32"):
-        self.dim = dim
-        self.w_kqv = Parameter(
-                init.kaiming_uniform(self.dim, self.dim * 3),
-                device=device, dtype=dtype)
-        self.w_out = Parameter(
-                init.kaiming_uniform(self.dim, self.dim),
-                device=device, dtype=dtype)
-        self.softmax = Softmax()
-
-    def forward(self, x: Tensor) -> Tensor:
-        k, q, v = ops.split(ops.reshape(x @ self.w_kqv, (x.shape[0], x.shape[1], 3, self.dim)), axis=2)
-        mask = thanos.triu((-float("inf") * init.ones(x.shape[1], x.shape[1], device=x.device)), k=1)
-        mask = ops.broadcast_to(ops.reshape(mask, (1,) + mask.shape), (x.shape[0],) + mask.shape)
-        atten = self.softmax(k @ ops.transpose(q) / np.sqrt(x.shape[2]) + mask)
-        return atten @ v @ self.w_out, atten
-
 class MultiheadAttention(Module):
     def __init__(self, dim=64, heads=1, device=None, dtype="float32"):
         self.dim = dim

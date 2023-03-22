@@ -74,17 +74,17 @@ def test_relu(shape, device):
 
 ATTENTION_SHAPES = [
     (8, 32, 64),
+    (8, 100, 32),
 ]
 @pytest.mark.parametrize("shape", ATTENTION_SHAPES)
 @pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
-def test_attention(shape, device):
+def test_onehead_attention(shape, device):
     _A = np.random.randn(*shape).astype(np.float32)
     A = thanos.Tensor(_A, device=device)
     TA = torch.Tensor(_A)
     TA.requires_grad = True
 
-    attn = thanos.nn.Attention()
-    #attn(A)
+    attn = thanos.nn.MultiheadAttention(shape[2], 1)
 
     torch_attn = torch.nn.MultiheadAttention(shape[2], 1, bias=False, batch_first=True)
     attn.w_kqv = thanos.nn.Parameter(torch_attn.in_proj_weight.detach().numpy().T)
@@ -108,6 +108,7 @@ def test_attention(shape, device):
 
 ATTENTION_SHAPES = [
     (8, 32, 64),
+    (8, 100, 32),
 ]
 @pytest.mark.parametrize("shape", ATTENTION_SHAPES)
 @pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
