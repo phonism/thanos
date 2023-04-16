@@ -22,3 +22,14 @@ register(
     nondeterministic=True,
 )
 
+register(
+    id='Gomoku6x6-v0',
+    entry_point='gym_gomoku.envs:GomokuEnv',
+    kwargs={
+        'player_color': 'black',
+        'opponent': 'random', # random policy is the simplest
+        'board_size': 6,
+    },
+    nondeterministic=True,
+)
+

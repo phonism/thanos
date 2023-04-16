@@ -1,4 +1,5 @@
 import gym
+import random
 import gym_gomoku
 import torch
 from torch import nn
@@ -18,7 +19,7 @@ def display_frames_as_gif(frames, gif_filename='./none.gif'):
 class FFN(nn.Module):
     def __init__(self, in_dim, out_dim):
         super(FFN, self).__init__()
-        self.hidden_dim = 256
+        self.hidden_dim = 128
 
         self.layers = nn.Sequential(
                 nn.Linear(in_dim, self.hidden_dim),
@@ -83,13 +84,9 @@ class PolicyGradient(object):
         probs = self.model(obs)
         # 注意：在test阶段，action是确定的，即就是上面的"probs"，但train阶段actor应该是去尽量『探索』各种actions，为了模拟这个探索的过程，
         # 我们借助概率分布来模拟
-        while True:
-            dist = torch.distributions.Categorical(probs) # 以概率probs形成一个类别分布
-            action = dist.sample([1]) # 指定生成样本的维度 # [1]
-            log_prob = dist.log_prob(action) # [1]
-            if obs[action] == 0:
-                break
-                
+        dist = torch.distributions.Categorical(probs) # 以概率probs形成一个类别分布
+        action = dist.sample([1]) # 指定生成样本的维度 # [1]
+        log_prob = dist.log_prob(action) # [1]
         return action.item(), log_prob
 
     def rollout(self, times, render=False):
@@ -108,11 +105,23 @@ class PolicyGradient(object):
                 batch_observation.append(observation)
                 action, log_prob = self.get_action(torch.Tensor(observation))
                 batch_log_probs.append(log_prob)
-                observation, reward, done, info = self.env.step(action)
+                if torch.Tensor(observation).view(-1)[action] != 0:
+                    reward = -1000
+                    done = True
+                else:
+                    observation, reward, done, info = self.env.step(action)
+                if reward == 1:
+                    #self.env.render()
+                    reward = 1000
+                if reward == 0:
+                    reward = 1
+                if reward == -1:
+                    reward = -20
                 batch_action.append(action)
                 reward_list.append(reward)
                 if done:
-                    #self.env.render()
+                    #if random.randint(1, 1000) == 77:
+                        #self.env.render()
                     break
             batch_reward.append(reward_list)
         if render:
@@ -132,7 +141,8 @@ class PolicyGradient(object):
 
 
 if __name__ == "__main__":
-    env = gym.make("Gomoku9x9-v0")
+    #env = gym.make("Gomoku9x9-v0")
+    env = gym.make("Gomoku6x6-v0")
     pg = PolicyGradient(env)
     pg.train()
 
