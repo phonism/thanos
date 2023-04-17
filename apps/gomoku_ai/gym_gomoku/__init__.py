@@ -12,6 +12,17 @@ register(
 )
 
 register(
+    id='Gomoku15x15-v0',
+    entry_point='gym_gomoku.envs:GomokuEnv',
+    kwargs={
+        'player_color': 'black',
+        'opponent': 'beginner', # beginner opponent policy has defend and strike rules
+        'board_size': 15,
+    },
+    nondeterministic=True,
+)
+
+register(
     id='Gomoku9x9-v0',
     entry_point='gym_gomoku.envs:GomokuEnv',
     kwargs={

@@ -16,6 +16,10 @@ def display_frames_as_gif(frames, gif_filename='./none.gif'):
     anim = animation.FuncAnimation(plt.gcf(), animate, frames=len(frames), interval=5)
     anim.save(img_dir+gif_filename, writer='imagemagick', fps=30)
 
+def output_frames(frames):
+    for frame in frames:
+        print(frame)
+
 class FFN(nn.Module):
     def __init__(self, in_dim, out_dim):
         super(FFN, self).__init__()
@@ -37,7 +41,7 @@ class FFN(nn.Module):
 
 class PolicyGradient(object):
     def __init__(self, env):
-        self.n_updates = 10
+        self.n_updates = 32
         self.lr = 0.01
         self.gamma = 0.99
 
@@ -52,7 +56,7 @@ class PolicyGradient(object):
         print('*'*8, 'start learning...')
         self.model.train()
         max_rewards = 0
-        for eps in range(10000):
+        for eps in range(3000):
             self.optim.zero_grad()
             batch_observation, batch_action, batch_reward, batch_log_probs = self.rollout(self.n_updates)
             batch_reward_togo = self.compute_reward_togo(batch_reward)
@@ -85,7 +89,11 @@ class PolicyGradient(object):
         # 注意：在test阶段，action是确定的，即就是上面的"probs"，但train阶段actor应该是去尽量『探索』各种actions，为了模拟这个探索的过程，
         # 我们借助概率分布来模拟
         dist = torch.distributions.Categorical(probs) # 以概率probs形成一个类别分布
-        action = dist.sample([1]) # 指定生成样本的维度 # [1]
+        #action = dist.sample([1]) # 指定生成样本的维度 # [1]
+        while True:
+            action = dist.sample([1]) # 指定生成样本的维度 # [1]
+            if obs[action] == 0:
+                break
         log_prob = dist.log_prob(action) # [1]
         return action.item(), log_prob
 
@@ -106,10 +114,11 @@ class PolicyGradient(object):
                 action, log_prob = self.get_action(torch.Tensor(observation))
                 batch_log_probs.append(log_prob)
                 if torch.Tensor(observation).view(-1)[action] != 0:
-                    reward = -1000
+                    reward = -10
                     done = True
                 else:
                     observation, reward, done, info = self.env.step(action)
+                """
                 if reward == 1:
                     #self.env.render()
                     reward = 1000
@@ -117,6 +126,7 @@ class PolicyGradient(object):
                     reward = 1
                 if reward == -1:
                     reward = -20
+                """
                 batch_action.append(action)
                 reward_list.append(reward)
                 if done:
@@ -125,7 +135,8 @@ class PolicyGradient(object):
                     break
             batch_reward.append(reward_list)
         if render:
-            display_frames_as_gif(frames, "test.gif")
+            #display_frames_as_gif(frames, "test.gif")
+            output_frames(frames)
 
         return batch_observation, batch_action, batch_reward, batch_log_probs
 
@@ -145,4 +156,3 @@ if __name__ == "__main__":
     env = gym.make("Gomoku6x6-v0")
     pg = PolicyGradient(env)
     pg.train()
-
