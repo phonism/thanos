@@ -162,7 +162,7 @@ def test_embedding(device):
     num_embeddings = 1000
     embedding_dim = 32
 
-    _A = np.array([5]).astype(np.int64)
+    _A = np.array([[5, 6], [3, 4]]).astype(np.int64)
     A = thanos.Tensor(_A, device=device)
     TA = torch.LongTensor(_A)
 

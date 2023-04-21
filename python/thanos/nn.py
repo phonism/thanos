@@ -240,10 +240,14 @@ class Softmax(Module):
 class Embedding(Module):
     def __init__(self, num_embeddings, embedding_dim):
         super(Embedding, self).__init__()
+        self.num_embeddings = num_embeddings
+        self.embedding_dim = embedding_dim
         self.weight = Parameter(init.randn(num_embeddings, embedding_dim))
 
     def forward(self, x):
-        return self.weight[x.detach().numpy(),:]
+        x_one_hot = init.one_hot(self.num_embeddings, x.realize_cached_data().flat, device=x.device)
+        res = x_one_hot @ self.weight
+        return res.reshape((*x.shape, self.embedding_dim))
 
 
 class MultiheadAttention(Module):

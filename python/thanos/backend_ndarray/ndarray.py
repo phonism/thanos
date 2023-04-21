@@ -374,6 +374,7 @@ class NDArray:
         new_strides = []
         offset = 0
         for i, idx in enumerate(idxs):
+            print(idx)
             start, stop, step = idx.start, min(idx.stop, self.shape[i]), idx.step
             new_shape.append(math.ceil((stop - start) / step))
             offset += (start * self.strides[i])

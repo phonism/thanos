@@ -448,7 +448,7 @@ class Stack(TensorOp):
     def gradient(self, out_grad, node):
         return split(out_grad, self.axis)
 
-def stack(tensors, axis: int):
+def stack(tensors, axis=0):
     return Stack(axis)(make_tuple(*tensors))
 
 class Split(TensorTupleOp):
