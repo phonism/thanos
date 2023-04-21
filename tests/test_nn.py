@@ -157,6 +157,31 @@ def test_multihead_attention(shape, device):
     torch_out[0].sum().backward()
     np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
 
+@pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
+def test_embedding(device):
+    num_embeddings = 1000
+    embedding_dim = 32
+
+    _A = np.array([5]).astype(np.int64)
+    A = thanos.Tensor(_A, device=device)
+    TA = torch.LongTensor(_A)
+
+    embed = thanos.nn.Embedding(num_embeddings, embedding_dim)
+    torch_embed = torch.nn.Embedding(num_embeddings, embedding_dim)
+    embed.weight = thanos.nn.Parameter(torch_embed.weight.detach().numpy())
+
+    thanos_out = embed(A)
+    torch_out = torch_embed(TA)
+
+    np.testing.assert_allclose(
+            thanos_out.detach().numpy(), 
+            torch_out.detach().numpy(), 
+            atol=1e-5, rtol=1e-5)
+
+    thanos_out.sum().backward()
+    torch_out.sum().backward()
+    np.testing.assert_allclose(embed.weight.detach().numpy(), torch_embed.weight.detach().numpy(), atol=1e-5, rtol=1e-5)
+
 
 if __name__ == "__main__":
     pytest.main()

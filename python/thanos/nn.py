@@ -237,6 +237,14 @@ class Softmax(Module):
         x = x_exp / ops.broadcast_to(ops.summation(x_exp, axis=self.dim, keepdims=True), x.shape)
         return x
 
+class Embedding(Module):
+    def __init__(self, num_embeddings, embedding_dim):
+        super(Embedding, self).__init__()
+        self.weight = Parameter(init.randn(num_embeddings, embedding_dim))
+
+    def forward(self, x):
+        return self.weight[x.detach().numpy(),:]
+
 
 class MultiheadAttention(Module):
     def __init__(self, dim=64, heads=1, device=None, dtype="float32"):

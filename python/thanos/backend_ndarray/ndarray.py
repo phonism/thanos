@@ -359,8 +359,6 @@ class NDArray:
         """
 
         # handle singleton as tuple, everything as slices
-        print(idxs)
-        print(self.shape)
         if not isinstance(idxs, tuple):
             idxs = (idxs,)
         idxs = tuple(
