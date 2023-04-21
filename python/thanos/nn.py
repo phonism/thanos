@@ -187,7 +187,7 @@ class BatchNorm1d(Module):
             var = ops.summation((x - mean) ** 2, axis=0) / batch
             # remember to detach the var
             self.running_var = (self.momentum * var.detach() + (1 - self.momentum) * self.running_var).detach()
-            var = ops.broadcast_to(ops.reshape(var, (1, self.dim)), x.shape).detach()
+            var = ops.broadcast_to(ops.reshape(var, (1, self.dim)), x.shape)
         else:
             mean = self.running_mean.reshape((1, self.dim)).broadcast_to(x.shape)
             var = self.running_var.reshape((1, self.dim)).broadcast_to(x.shape)
@@ -196,6 +196,28 @@ class BatchNorm1d(Module):
         b = ops.broadcast_to(ops.reshape(self.bias, (1, self.dim)), x.shape)
         x = w * x + b
         return x
+
+class LayerNorm(Module):
+    def __init__(self, dim, eps=1e-5, device=None, dtype="float32"):
+        super().__init__()
+        self.dim = dim
+        self.eps = eps
+        self.gamma = Parameter(init.ones(dim, device=device, dtype=dtype))
+        self.beta = Parameter(init.zeros(dim, device=device, dtype=dtype))
+
+    def forward(self, x):
+        if x.shape[-1] != self.dim:
+            raise RuntimeError('Input dims should be %d' % self.dim)
+        mean = ops.summation(x, axis=-1) / x.shape[-1]
+        mean = ops.broadcast_to(ops.reshape(mean, mean.shape + (1,)), x.shape)
+        var = ops.summation((x - mean) ** 2, axis=-1) / self.dim
+        var = ops.broadcast_to(ops.reshape(var, var.shape + (1,)), x.shape)
+        gamma = ops.broadcast_to(ops.reshape(self.gamma, (1, self.dim)), x.shape)
+        beta = ops.broadcast_to(ops.reshape(self.beta, (1, self.dim)), x.shape)
+        output = (x - mean) / ops.sqrt(var + self.eps)
+        output = gamma * output + beta 
+        return output
+
 
 class SoftmaxLoss(Module):
     def forward(self, logits: Tensor, y: Tensor) -> Tensor:

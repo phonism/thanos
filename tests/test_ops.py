@@ -244,6 +244,21 @@ def test_relu(shape, device):
     thanos.relu(A).sum().backward()
     np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
 
+@pytest.mark.parametrize("shape", GENERAL_SHAPES)
+@pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
+def test_sqrt(shape, device):
+    _A = np.random.randn(*shape).astype(np.float32) + 5.
+    A = thanos.Tensor(_A, device=device)
+    TA = torch.Tensor(_A)
+    TA.requires_grad = True
+    np.testing.assert_allclose(
+            torch.sqrt(TA).detach().numpy(), 
+            thanos.sqrt(A).detach().numpy(), atol=1e-5, rtol=1e-5)
+
+    torch.sqrt(TA).sum().backward()
+    thanos.sqrt(A).sum().backward()
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+
 STACK_PARAMETERS = [
     ((5, 5), 0, 1),
     ((5, 5), 0, 2),

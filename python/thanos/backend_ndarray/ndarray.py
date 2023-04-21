@@ -359,6 +359,8 @@ class NDArray:
         """
 
         # handle singleton as tuple, everything as slices
+        print(idxs)
+        print(self.shape)
         if not isinstance(idxs, tuple):
             idxs = (idxs,)
         idxs = tuple(
@@ -493,6 +495,11 @@ class NDArray:
     def tanh(self):
         out = NDArray.make(self.shape, device=self.device)
         self.device.ewise_tanh(self.compact()._handle, out._handle)
+        return out
+
+    def sqrt(self):
+        out = NDArray.make(self.shape, device=self.device)
+        self.device.ewise_sqrt(self.compact()._handle, out._handle)
         return out
 
     ### Matrix multiplication
@@ -720,3 +727,6 @@ def diag(a):
 
 def triu(a, k=0):
     return a.triu(k=k)
+
+def sqrt(a):
+    return a.sqrt()

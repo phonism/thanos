@@ -183,6 +183,16 @@ class Exp(TensorOp):
 def exp(a):
     return Exp()(a)
 
+class Sqrt(TensorOp):
+    def compute(self, a):
+        return array_api.sqrt(a)
+
+    def gradient(self, out_grad: Tensor, node: Tensor):
+        hs, = node.inputs
+        return (out_grad / (2 * sqrt(hs))).detach()
+
+def sqrt(a):
+    return Sqrt()(a)
 
 class Transpose(TensorOp):
     def __init__(self, axis: Optional[tuple] = None):

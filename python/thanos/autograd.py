@@ -9,7 +9,6 @@ from .backend_selection import Device, array_api, NDArray, default_device
 
 TENSOR_COUNTER = 0
 
-
 class Op:
     """
     operator definitions
@@ -87,7 +86,7 @@ class Value:
     cached_data: NDArray
     requires_grad: bool
 
-    def realize_cached_data(self):
+    def realize_cached_data(self) -> NDArray:
         """
         Run compute to realize the cached data
         """
@@ -98,7 +97,7 @@ class Value:
         self.cached_data = self.op.compute(*[x.realize_cached_data() for x in self.inputs])
         return self.cached_data
 
-    def is_leaf(self):
+    def is_leaf(self) -> bool:
         """
         check current value is the leaf node in the computation graph
         """
@@ -136,7 +135,7 @@ class Value:
         return Value.make_const(self.realize_cached_data())
 
     @classmethod
-    def make_const(cls, data, *, requires_grad=False):
+    def make_const(cls, data: NDArray, *, requires_grad=False) -> "Value":
         """
         make const
         """
@@ -145,7 +144,7 @@ class Value:
         return value
 
     @classmethod
-    def make_from_op(cls, op: Op, inputs: List["Value"]):
+    def make_from_op(cls, op: Op, inputs: List["Value"]) -> "Value":
         """
         make from op
         """
@@ -163,14 +162,7 @@ class Tensor(Value):
     """
     grad: "Tensor"
 
-    def __init__(
-            self,
-            array,
-            *,
-            device: Optional[Device] = None,
-            dtype=None,
-            requires_grad=True,
-            **kwargs):
+    def __init__(self, array, *, device: Optional[Device] = None, dtype=None, requires_grad=True, **kwargs):
         if isinstance(array, Tensor):
             if device is None:
                 device = array.device
@@ -254,6 +246,14 @@ class Tensor(Value):
     def __repr__(self):
         return "Id:" + str(id(self)) + " Tensor(" + str(self.realize_cached_data()) + ")"
 
+    def __len__(self):
+        return self.realize_cached_data().shape[0]
+
+    def __getitem__(self, index):
+        tensor = Tensor.__new__(Tensor)
+        tensor._init(None, [], cached_data=self.realize_cached_data()[index], requires_grad=self.requires_grad)
+        return tensor
+
     def __str__(self):
         return str(self.realize_cached_data())
 
@@ -296,6 +296,7 @@ class Tensor(Value):
     def __neg__(self):
         return thanos.ops.Negate()(self)
 
+
     def equal(self, other):
         if isinstance(other, Tensor):
             return thanos.ops.Equal()(self, other)
@@ -328,6 +329,9 @@ class Tensor(Value):
 
     def matmul(self, other):
         return thanos.ops.Matmul()(self, other)
+
+    def sqrt(self):
+        return thanos.ops.Sqrt()(self)
 
 
     __radd__ = __add__

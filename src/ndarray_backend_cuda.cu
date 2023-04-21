@@ -23,6 +23,7 @@ __device__ scalar_t POWER(scalar_t a, scalar_t b) {return std::pow(a, b);}
 __device__ scalar_t LOG(scalar_t a) {return std::log(a);}
 __device__ scalar_t EXP(scalar_t a) {return std::exp(a);}
 __device__ scalar_t TANH(scalar_t a) {return std::tanh(a);}
+__device__ scalar_t SQRT(scalar_t a) {return std::sqrt(a);}
 __device__ scalar_t MAX(scalar_t a, scalar_t b) {return a > b ? a : b;}
 
 struct CudaArray {
@@ -412,6 +413,15 @@ void EwiseLog(const CudaArray& a, CudaArray* out) {
     EwiseLogKernel<<<dim.grid, dim.block>>>(a.ptr, out->ptr, out->size);
 }
 
+__global__ void EwiseSqrtKernel(const scalar_t* a, scalar_t* out, size_t size) {
+    EwiseOperatorKernel(a, out, size, SQRT);
+}
+
+void EwiseSqrt(const CudaArray& a, CudaArray* out) {
+    CudaDims dim = CudaOneDim(out->size);
+    EwiseSqrtKernel<<<dim.grid, dim.block>>>(a.ptr, out->ptr, out->size);
+}
+
 __global__ void EwiseExpKernel(const scalar_t* a, scalar_t* out, size_t size) {
     EwiseOperatorKernel(a, out, size, EXP);
 }
@@ -682,6 +692,7 @@ PYBIND11_MODULE(ndarray_backend_cuda, m) {
     m.def("scalar_ge", ScalarGe);
     
     m.def("ewise_log", EwiseLog);
+    m.def("ewise_sqrt", EwiseSqrt);
     m.def("ewise_exp", EwiseExp);
     m.def("ewise_tanh", EwiseTanh);
     

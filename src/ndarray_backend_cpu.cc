@@ -334,6 +334,15 @@ void EwiseTanh(const AlignedArray& a, AlignedArray* out) {
     }
 }
 
+void EwiseSqrt(const AlignedArray& a, AlignedArray* out) {
+    /**
+     * Set entries in out to be the multiply of correspondings entires in a and b.
+     */
+    for (size_t i = 0; i < a.size; i++) {
+        out->ptr[i] = std::sqrt(a.ptr[i]);
+    }
+}
+
 /// END YOUR SOLUTION
 
 void Matmul(const AlignedArray& a, const AlignedArray& b, AlignedArray* out, 
@@ -630,6 +639,7 @@ PYBIND11_MODULE(ndarray_backend_cpu, m) {
     m.def("ewise_log", EwiseLog);
     m.def("ewise_exp", EwiseExp);
     m.def("ewise_tanh", EwiseTanh);
+    m.def("ewise_sqrt", EwiseSqrt);
     m.def("matmul", Matmul);
     m.def("matmul_tiled", MatmulTiled);
     m.def("reduce_max", ReduceMax);
