@@ -57,18 +57,18 @@ def test_batchnorm1d(shape, device):
     TC.sum().backward()
     np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
 
-@pytest.mark.parametrize("shape", NN_BASE_SHAPES)
+@pytest.mark.parametrize("shape", SOFTMAX_SHAPES)
 @pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
 def test_layernorm(shape, device):
     _A = np.random.randn(*shape).astype(np.float32)
     A = thanos.Tensor(_A, device=device)
     TA = torch.Tensor(_A)
     TA.requires_grad = True
-    norm = thanos.nn.LayerNorm(shape[1])
+    norm = thanos.nn.LayerNorm(shape[-1])
     if device == thanos.cuda():
         norm.cuda()
     C = norm(A)
-    TC = torch.nn.LayerNorm(shape[1])(TA)
+    TC = torch.nn.LayerNorm(shape[-1])(TA)
     np.testing.assert_allclose(TC.detach().numpy(), C.detach().numpy(), atol=1e-5, rtol=1e-5)
 
     C.sum().backward()

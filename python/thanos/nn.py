@@ -131,7 +131,7 @@ class Linear(Module):
     def forward(self, x: Tensor) -> Tensor:
         x = ops.matmul(x, self.weight)
         if self.bias:
-            x = x + ops.broadcast_to(self.bias, x.shape)
+            x = x + ops.broadcast_to(ops.reshape(self.bias, (1,) * (len(x.shape) - 1) + (self.out_features,)), x.shape)
         return x
 
 
@@ -212,8 +212,8 @@ class LayerNorm(Module):
         mean = ops.broadcast_to(ops.reshape(mean, mean.shape + (1,)), x.shape)
         var = ops.summation((x - mean) ** 2, axis=-1) / self.dim
         var = ops.broadcast_to(ops.reshape(var, var.shape + (1,)), x.shape)
-        gamma = ops.broadcast_to(ops.reshape(self.gamma, (1, self.dim)), x.shape)
-        beta = ops.broadcast_to(ops.reshape(self.beta, (1, self.dim)), x.shape)
+        gamma = ops.broadcast_to(ops.reshape(self.gamma, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
+        beta = ops.broadcast_to(ops.reshape(self.beta, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
         output = (x - mean) / ops.sqrt(var + self.eps)
         output = gamma * output + beta 
         return output

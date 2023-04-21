@@ -9,6 +9,10 @@ class Optimizer:
     def step(self):
         raise NotImplementedError()
 
+    def zero_grad(self):
+        for p in self.params:
+            p.grad = None
+
     def reset_grad(self):
         for p in self.params:
             p.grad = None

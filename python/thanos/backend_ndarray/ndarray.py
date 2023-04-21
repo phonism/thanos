@@ -318,7 +318,7 @@ class NDArray:
         if start == None:
             start = 0
         if start < 0:
-            start = self.shape[dim]
+            start = start + self.shape[dim]
         if stop == None:
             stop = self.shape[dim]
         if stop < 0:
@@ -374,7 +374,6 @@ class NDArray:
         new_strides = []
         offset = 0
         for i, idx in enumerate(idxs):
-            print(idx)
             start, stop, step = idx.start, min(idx.stop, self.shape[i]), idx.step
             new_shape.append(math.ceil((stop - start) / step))
             offset += (start * self.strides[i])
@@ -516,7 +515,6 @@ class NDArray:
         The GPU (and numpy) versions don't have any tiled version (or rather,
         the GPU version will just work natively by tiling any input size).
         """
-
         if self.ndim == 2 and other.ndim == 2 and self.shape[1] == other.shape[0]:
             m, n, p = self.shape[0], self.shape[1], other.shape[1]
             # if the matrix is aligned, use tiled matrix multiplication
