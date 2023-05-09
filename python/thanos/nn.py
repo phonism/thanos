@@ -218,6 +218,15 @@ class LayerNorm(Module):
         output = gamma * output + beta 
         return output
 
+class RMSNorm(Module):
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super(RMSNorm, self).__init__()
+        self.eps = eps
+        self.weight = Parameter(init.ones(dim))
+
+    def forward(self, x):
+        rms = x / ops.sqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+        return rms * self.weight
 
 class SoftmaxLoss(Module):
     def forward(self, logits: Tensor, y: Tensor) -> Tensor:

@@ -66,3 +66,36 @@ class Adam(Optimizer):
             m_next_hat = m_cur / (1 - self.beta1 ** self.t)
             v_next_hat = v_cur / (1 - self.beta2 ** self.t)
             theta.data -= self.lr * m_next_hat / ((v_next_hat ** 0.5) + self.eps)
+
+class AdamW(Optimizer):
+    def __init__(self, params, lr=0.01, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.01):
+        super().__init__(params)
+        self.lr = lr
+        self.beta1 = beta1
+        self.beta2 = beta2
+        self.eps = eps
+        self.weight_decay = weight_decay
+        self.t = 0
+        self.m = {}
+        self.v = {}
+
+    def step(self):
+        self.t += 1
+        for theta_id, theta in enumerate(self.params):
+            grad = theta.grad.detach()
+
+            if theta_id not in self.m:
+                m_cur = (1 - self.beta1) * grad
+            else:
+                m_cur = self.m[theta_id] * self.beta1 + (1 - self.beta1) * grad
+
+            if theta_id not in self.v:
+                v_cur = (1 - self.beta2) * (grad ** 2)
+            else:
+                v_cur = self.v[theta_id] * self.beta2 + (1 - self.beta2) * (grad ** 2)
+
+            self.m[theta_id] = m_cur.detach()
+            self.v[theta_id] = v_cur.detach()
+            m_next_hat = m_cur / (1 - self.beta1 ** self.t)
+            v_next_hat = v_cur / (1 - self.beta2 ** self.t)
+            theta.data -= self.lr * (m_next_hat / ((v_next_hat ** 0.5) + self.eps) + self.weight_decay * theta.data.detach())
