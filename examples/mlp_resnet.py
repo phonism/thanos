@@ -68,7 +68,7 @@ def epoch(dataloader, model, opt=None):
 
 def train_mnist(
         batch_size=128, epochs=10, optimizer=optim.AdamW,
-        lr=0.001, weight_decay=0.01, hidden_dim=128, data_dir="data"):
+        lr=0.001, weight_decay=0.001, hidden_dim=128, data_dir="data"):
     np.random.seed(4)
     train_img_path = os.path.join(data_dir, "train-images-idx3-ubyte.gz")
     train_label_path = os.path.join(data_dir, "train-labels-idx1-ubyte.gz")
