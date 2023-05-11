@@ -3,13 +3,13 @@
 from numbers import Number
 from typing import Optional, List
 import numpy
-from .autograd import TensorOp, NDArray, Tensor, TensorTuple, TensorTupleOp, Value
+from ..autograd import TensorOp, NDArray, Tensor, TensorTuple, TensorTupleOp, Value
 from thanos import init
 
 # NOTE: we will numpy as the array_api
 # to backup our computations, this line will change in later homeworks
 #import numpy as array_api
-from .backend_selection import array_api, NDArray
+from ..backend_selection import array_api, NDArray
 
 class MakeTensorTuple(TensorTupleOp):
     def compute(self, *args) -> tuple:

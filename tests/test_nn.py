@@ -4,6 +4,7 @@ import itertools
 import numpy as np
 import pytest
 import torch
+import thanos.nn.functional as F
 
 import thanos
 #from thanos import backend_ndarray as nd
@@ -170,6 +171,9 @@ def test_embedding(device):
     torch_embed = torch.nn.Embedding(num_embeddings, embedding_dim)
     embed.weight = thanos.nn.Parameter(torch_embed.weight.detach().numpy())
 
+    if device == thanos.cuda():
+        embed.cuda()
+
     thanos_out = embed(A)
     torch_out = torch_embed(TA)
 
@@ -181,6 +185,21 @@ def test_embedding(device):
     thanos_out.sum().backward()
     torch_out.sum().backward()
     np.testing.assert_allclose(embed.weight.detach().numpy(), torch_embed.weight.detach().numpy(), atol=1e-5, rtol=1e-5)
+
+@pytest.mark.parametrize("shape", SOFTMAX_SHAPES)
+@pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
+def test_silu(shape, device):
+    _A = np.random.randn(*shape).astype(np.float32)
+    A = thanos.Tensor(_A, device=device)
+    TA = torch.Tensor(_A)
+    TA.requires_grad = True
+    C = thanos.nn.SiLU()(A)
+    TC = torch.nn.SiLU()(TA)
+    np.testing.assert_allclose(TC.detach().numpy(), C.detach().numpy(), atol=1e-5, rtol=1e-5)
+
+    C.sum().backward()
+    TC.sum().backward()
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
 
 
 if __name__ == "__main__":

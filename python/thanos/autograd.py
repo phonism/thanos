@@ -16,7 +16,7 @@ class Op:
     def __call__(self, *args):
         raise NotImplementedError()
 
-    def compute(self, *args: Tuple[NDArray]) -> NDArray:
+    def compute(self, *args) -> NDArray:
         """Calculate forward pass of operator.
 
         Parameters
@@ -265,73 +265,73 @@ class Tensor(Value):
 
     def __add__(self, other):
         if isinstance(other, Tensor):
-            return thanos.ops.EWiseAdd()(self, other)
+            return thanos.nn.functional.EWiseAdd()(self, other)
         else:
-            return thanos.ops.AddScalar(other)(self)
+            return thanos.nn.functional.AddScalar(other)(self)
 
     def __sub__(self, other):
         if isinstance(other, Tensor):
-            return thanos.ops.EWiseAdd()(self, thanos.ops.Negate()(other))
+            return thanos.nn.functional.EWiseAdd()(self, thanos.nn.functional.Negate()(other))
         else:
-            return thanos.ops.AddScalar(-other)(self)
+            return thanos.nn.functional.AddScalar(-other)(self)
 
     def __mul__(self, other):
         if isinstance(other, Tensor):
-            return thanos.ops.EWiseMul()(self, other)
+            return thanos.nn.functional.EWiseMul()(self, other)
         else:
-            return thanos.ops.MulScalar(other)(self)
+            return thanos.nn.functional.MulScalar(other)(self)
 
     def __truediv__(self, other):
         if isinstance(other, Tensor):
-            return thanos.ops.EWiseDiv()(self, other)
+            return thanos.nn.functional.EWiseDiv()(self, other)
         else:
-            return thanos.ops.DivScalar(other)(self)
+            return thanos.nn.functional.DivScalar(other)(self)
 
     def __pow__(self, other):
         if isinstance(other, Tensor):
             raise TypeError("pow value must be a scalar")
         else:
-            return thanos.ops.PowScalar(other)(self)
+            return thanos.nn.functional.PowScalar(other)(self)
 
     def __neg__(self):
-        return thanos.ops.Negate()(self)
+        return thanos.nn.functional.Negate()(self)
 
 
     def equal(self, other):
         if isinstance(other, Tensor):
-            return thanos.ops.Equal()(self, other)
+            return thanos.nn.functional.Equal()(self, other)
         else:
-            return thanos.ops.Equal()(self, other)
+            return thanos.nn.functional.Equal()(self, other)
 
     def log(self):
-        return thanos.ops.Log()(self)
+        return thanos.nn.functional.Log()(self)
 
     def exp(self):
-        return thanos.ops.Exp()(self)
+        return thanos.nn.functional.Exp()(self)
 
     def transpose(self, axis=None):
-        return thanos.ops.Transpose(axis)(self)
+        return thanos.nn.functional.Transpose(axis)(self)
 
     def reshape(self, shape):
-        return thanos.ops.Reshape(shape)(self)
+        return thanos.nn.functional.Reshape(shape)(self)
 
     def summation(self, axis=None):
-        return thanos.ops.Summation(axis)(self)
+        return thanos.nn.functional.Summation(axis)(self)
 
     def sum(self, axis=None):
-        return thanos.ops.Summation(axis)(self)
+        return thanos.nn.functional.Summation(axis)(self)
 
     def broadcast_to(self, shape):
-        return thanos.ops.BroadcastTo(shape)(self)
+        return thanos.nn.functional.BroadcastTo(shape)(self)
 
     def __matmul__(self, other):
-        return thanos.ops.Matmul()(self, other)
+        return thanos.nn.functional.Matmul()(self, other)
 
     def matmul(self, other):
-        return thanos.ops.Matmul()(self, other)
+        return thanos.nn.functional.Matmul()(self, other)
 
     def sqrt(self):
-        return thanos.ops.Sqrt()(self)
+        return thanos.nn.functional.Sqrt()(self)
 
 
     __radd__ = __add__
@@ -351,7 +351,7 @@ class TensorTuple(Value):
         return len(cdata)
 
     def __getitem__(self, index: int):
-        return thanos.ops.tuple_get_item(self, index)
+        return thanos.nn.functional.tuple_get_item(self, index)
 
     def tuple(self):
         return tuple([x for x in self])
@@ -365,7 +365,7 @@ class TensorTuple(Value):
     def __add__(self, other):
         assert isinstance(other, TensorTuple)
         assert len(self) == len(other)
-        return thanos.ops.make_tuple(*[self[i] + other[i] for i in range(len(self))])
+        return thanos.nn.functional.make_tuple(*[self[i] + other[i] for i in range(len(self))])
 
     def detach(self):
         """Create a new tensor that shares the data but detaches from the graph."""

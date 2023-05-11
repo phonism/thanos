@@ -4,8 +4,8 @@ The module
 
 from typing import List, Callable, Any
 import thanos
-from thanos.autograd import Tensor
-from thanos import ops
+from ..autograd import Tensor
+import thanos.nn.functional as F
 from thanos import init
 import thanos.backend_ndarray as nd
 import numpy as np
@@ -125,24 +125,24 @@ class Linear(Module):
                 device=device, dtype=dtype)
         if bias:
             self.bias = Parameter(
-                    ops.transpose(init.kaiming_uniform(self.out_features, 1)),
+                    F.transpose(init.kaiming_uniform(self.out_features, 1)),
                     device=device, dtype=dtype)
 
     def forward(self, x: Tensor) -> Tensor:
-        x = ops.matmul(x, self.weight)
+        x = F.matmul(x, self.weight)
         if self.bias:
-            x = x + ops.broadcast_to(ops.reshape(self.bias, (1,) * (len(x.shape) - 1) + (self.out_features,)), x.shape)
+            x = x + F.broadcast_to(F.reshape(self.bias, (1,) * (len(x.shape) - 1) + (self.out_features,)), x.shape)
         return x
 
 
 class Flatten(Module):
     def forward(self, x) -> Tensor:
-        return ops.reshape(x, (x.shape[0], -1))
+        return F.reshape(x, (x.shape[0], -1))
 
 
 class ReLU(Module):
     def forward(self, x: Tensor) -> Tensor:
-        x = ops.relu(x)
+        x = F.relu(x)
         return x
 
 
@@ -180,20 +180,20 @@ class BatchNorm1d(Module):
     def forward(self, x: Tensor) -> Tensor:
         if self.training:
             batch = x.shape[0]
-            mean = ops.summation(x, axis=0) / batch
+            mean = F.summation(x, axis=0) / batch
             # remember to detach the mean
             self.running_mean = (self.momentum * mean.detach() + (1 - self.momentum) * self.running_mean).detach()
-            mean = ops.broadcast_to(ops.reshape(mean, (1, self.dim)), x.shape)
-            var = ops.summation((x - mean) ** 2, axis=0) / batch
+            mean = F.broadcast_to(F.reshape(mean, (1, self.dim)), x.shape)
+            var = F.summation((x - mean) ** 2, axis=0) / batch
             # remember to detach the var
             self.running_var = (self.momentum * var.detach() + (1 - self.momentum) * self.running_var).detach()
-            var = ops.broadcast_to(ops.reshape(var, (1, self.dim)), x.shape)
+            var = F.broadcast_to(F.reshape(var, (1, self.dim)), x.shape)
         else:
             mean = self.running_mean.reshape((1, self.dim)).broadcast_to(x.shape)
             var = self.running_var.reshape((1, self.dim)).broadcast_to(x.shape)
         x = (x - mean) / (var + self.eps) ** 0.5
-        w = ops.broadcast_to(ops.reshape(self.weight, (1, self.dim)), x.shape)
-        b = ops.broadcast_to(ops.reshape(self.bias, (1, self.dim)), x.shape)
+        w = F.broadcast_to(F.reshape(self.weight, (1, self.dim)), x.shape)
+        b = F.broadcast_to(F.reshape(self.bias, (1, self.dim)), x.shape)
         x = w * x + b
         return x
 
@@ -208,13 +208,13 @@ class LayerNorm(Module):
     def forward(self, x):
         if x.shape[-1] != self.dim:
             raise RuntimeError('Input dims should be %d' % self.dim)
-        mean = ops.summation(x, axis=-1) / x.shape[-1]
-        mean = ops.broadcast_to(ops.reshape(mean, mean.shape + (1,)), x.shape)
-        var = ops.summation((x - mean) ** 2, axis=-1) / self.dim
-        var = ops.broadcast_to(ops.reshape(var, var.shape + (1,)), x.shape)
-        gamma = ops.broadcast_to(ops.reshape(self.gamma, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
-        beta = ops.broadcast_to(ops.reshape(self.beta, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
-        output = (x - mean) / ops.sqrt(var + self.eps)
+        mean = F.summation(x, axis=-1) / x.shape[-1]
+        mean = F.broadcast_to(F.reshape(mean, mean.shape + (1,)), x.shape)
+        var = F.summation((x - mean) ** 2, axis=-1) / self.dim
+        var = F.broadcast_to(F.reshape(var, var.shape + (1,)), x.shape)
+        gamma = F.broadcast_to(F.reshape(self.gamma, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
+        beta = F.broadcast_to(F.reshape(self.beta, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
+        output = (x - mean) / F.sqrt(var + self.eps)
         output = gamma * output + beta 
         return output
 
@@ -225,30 +225,31 @@ class RMSNorm(Module):
         self.weight = Parameter(init.ones(dim))
 
     def forward(self, x):
-        rms = x / ops.sqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+        rms = x / F.sqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
         return rms * self.weight
 
 class SoftmaxLoss(Module):
     def forward(self, logits: Tensor, y: Tensor) -> Tensor:
         num, classes = logits.shape
         y_one_hot = init.one_hot(classes, y, dtype=logits.dtype, device=logits.device)
-        logsum = ops.logsumexp(logits, axis=(1,))
-        logits_y = ops.summation(logits * y_one_hot, axis=(1,))
+        logsum = F.logsumexp(logits, axis=(1,))
+        logits_y = F.summation(logits * y_one_hot, axis=(1,))
         loss = logsum - logits_y
-        return ops.summation(loss) / logits.shape[0]
+        return F.summation(loss) / logits.shape[0]
 
 class Softmax(Module):
     def __init__(self, dim=-1):
+        super().__init__()
         self.dim = dim
 
     def forward(self, x: Tensor) -> Tensor:
-        x_exp = ops.exp(x - ops.broadcast_to(ops.max(x, self.dim, keepdims=True), x.shape))
-        x = x_exp / ops.broadcast_to(ops.summation(x_exp, axis=self.dim, keepdims=True), x.shape)
+        x_exp = F.exp(x - F.broadcast_to(F.max(x, self.dim, keepdims=True), x.shape))
+        x = x_exp / F.broadcast_to(F.summation(x_exp, axis=self.dim, keepdims=True), x.shape)
         return x
 
 class Embedding(Module):
     def __init__(self, num_embeddings, embedding_dim):
-        super(Embedding, self).__init__()
+        super().__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
         self.weight = Parameter(init.randn(num_embeddings, embedding_dim))
@@ -257,6 +258,13 @@ class Embedding(Module):
         x_one_hot = init.one_hot(self.num_embeddings, x.realize_cached_data().flat, device=x.device)
         res = x_one_hot @ self.weight
         return res.reshape((*x.shape, self.embedding_dim))
+
+class SiLU(Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x / (F.exp(-x) + 1)
 
 
 class MultiheadAttention(Module):
@@ -272,9 +280,9 @@ class MultiheadAttention(Module):
         self.softmax = Softmax()
 
     def forward(self, x: Tensor) -> Tensor:
-        k, q, v = ops.split(ops.reshape(x @ self.w_kqv, (x.shape[0], x.shape[1], 3, self.dim)), axis=2)
-        k, q, v = [ops.reshape(a, (x.shape[0], x.shape[1], self.heads, self.dim // self.heads)).transpose((1, 2)) for a in [k, q, v]]
+        k, q, v = F.split(F.reshape(x @ self.w_kqv, (x.shape[0], x.shape[1], 3, self.dim)), axis=2)
+        k, q, v = [F.reshape(a, (x.shape[0], x.shape[1], self.heads, self.dim // self.heads)).transpose((1, 2)) for a in [k, q, v]]
         mask = thanos.triu((-float("inf") * init.ones(x.shape[1], x.shape[1], device=x.device)), k=1)
-        mask = ops.broadcast_to(ops.reshape(mask, (1, 1,) + mask.shape), (k.shape[0], k.shape[1],) + mask.shape)
-        atten = self.softmax(k @ ops.transpose(q) / np.sqrt(self.dim // self.heads) + mask)
-        return ops.reshape((atten @ v).transpose((1, 2)), (x.shape[0], x.shape[1], self.dim)) @ self.w_out, atten
+        mask = F.broadcast_to(F.reshape(mask, (1, 1,) + mask.shape), (k.shape[0], k.shape[1],) + mask.shape)
+        atten = self.softmax(k @ F.transpose(q) / np.sqrt(self.dim // self.heads) + mask)
+        return F.reshape((atten @ v).transpose((1, 2)), (x.shape[0], x.shape[1], self.dim)) @ self.w_out, atten
