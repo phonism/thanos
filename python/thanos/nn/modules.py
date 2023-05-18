@@ -74,6 +74,15 @@ class Module:
     def parameters(self) -> List[Tensor]:
         """Return the list of parameters in the module."""
         return _unpack_params(self.__dict__)
+    
+    def num_parameters(self):
+        num_parameters = 0
+        for p in self.parameters():
+            cur = 1
+            for x in p.shape:
+                cur *= x
+            num_parameters += cur
+        return num_parameters
 
     def vars(self) -> List[Tensor]:
         """Return the list of parameters in the module."""
@@ -123,6 +132,7 @@ class Linear(Module):
         self.weight = Parameter(
                 init.kaiming_uniform(self.in_features, self.out_features),
                 device=device, dtype=dtype)
+        self.bias = None
         if bias:
             self.bias = Parameter(
                     F.transpose(init.kaiming_uniform(self.out_features, 1)),
@@ -220,13 +230,18 @@ class LayerNorm(Module):
 
 class RMSNorm(Module):
     def __init__(self, dim: int, eps: float = 1e-6):
-        super(RMSNorm, self).__init__()
+        super().__init__()
         self.eps = eps
+        self.dim = dim
         self.weight = Parameter(init.ones(dim))
 
     def forward(self, x):
-        rms = x / F.sqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-        return rms * self.weight
+        x_square = x ** 2
+        x_mean = F.summation(x_square, axis=-1) / x_square.shape[-1]
+        x_mean = F.broadcast_to(F.reshape(x_mean, x_mean.shape + (1,)), x.shape)
+        rms = x / F.sqrt(x_mean + self.eps)
+        weight = F.broadcast_to(F.reshape(self.weight, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
+        return rms * weight
 
 class SoftmaxLoss(Module):
     def forward(self, logits: Tensor, y: Tensor) -> Tensor:
@@ -258,6 +273,26 @@ class Embedding(Module):
         x_one_hot = init.one_hot(self.num_embeddings, x.realize_cached_data().flat, device=x.device)
         res = x_one_hot @ self.weight
         return res.reshape((*x.shape, self.embedding_dim))
+    
+class RotaryEmbedding(Module):
+    def __init__(self, dim, max_position_embeddings=2048, base=10000):
+        super().__init__()
+        self.inv_freq = thanos.Tensor(1.0 / (base ** (np.arange(0, dim, 2) / dim)))
+
+        self.max_seq_len_cached = max_position_embeddings
+        t = thanos.Tensor(np.arange(self.max_seq_len_cached, dtype=self.inv_freq.dtype))
+        t = F.reshape(t, (t.shape[0], 1))
+        self.inv_freq = F.reshape(self.inv_freq, (1, self.inv_freq.shape[0]))
+        freqs = t @ self.inv_freq
+        emb = F.reshape(F.stack((freqs, freqs), dim=-1), (freqs.shape[0], freqs.shape[1] * 2))
+        self.cos_cached = F.reshape(emb.cos(), (1, 1) + (emb.shape))
+        self.sin_cached = F.reshape(emb.sin(), (1, 1) + (emb.shape))
+
+    def forward(self, x, seq_len=None):
+        return (
+            self.cos_cached[:, :, :seq_len, :],
+            self.sin_cached[:, :, :seq_len, :],
+        )
 
 class SiLU(Module):
     def __init__(self):

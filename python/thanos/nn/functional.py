@@ -160,6 +160,29 @@ class PowScalar(TensorOp):
 def pow_scalar(a, scalar):
     return PowScalar(scalar)(a)
 
+class Sin(TensorOp):
+    def compute(self, a):
+        return array_api.sin(a)
+
+    def gradient(self, out_grad: Tensor, node: Tensor):
+        hs, = node.inputs
+        return (out_grad * cos(hs)).detach()
+
+def sin(a):
+    return Sin()(a)
+
+class Cos(TensorOp):
+    def compute(self, a):
+        return array_api.cos(a)
+
+    def gradient(self, out_grad: Tensor, node: Tensor):
+        hs, = node.inputs
+        return (-out_grad * sin(hs)).detach()
+
+def cos(a):
+    return Cos()(a)
+
+
 class Log(TensorOp):
     def compute(self, a):
         return array_api.log(a)
@@ -448,8 +471,8 @@ class Stack(TensorOp):
     def gradient(self, out_grad, node):
         return split(out_grad, self.axis)
 
-def stack(tensors, axis=0):
-    return Stack(axis)(make_tuple(*tensors))
+def stack(tensors, dim=0):
+    return Stack(dim)(make_tuple(*tensors))
 
 class Split(TensorTupleOp):
     def __init__(self, axis: int):
