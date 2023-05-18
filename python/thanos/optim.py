@@ -99,14 +99,3 @@ class AdamW(Optimizer):
             m_next_hat = m_cur / (1 - self.beta1 ** self.t)
             v_next_hat = v_cur / (1 - self.beta2 ** self.t)
             theta.data -= self.lr * (m_next_hat / ((v_next_hat ** 0.5) + self.eps) + self.weight_decay * theta.data.detach())
-
-class LRScheduler:
-    def __init__(self, optimizer):
-        self.optimizer = optimizer
-
-    def step(self):
-        raise NotImplementedError
-
-class CosineAnnealingLR(LRScheduler):
-    def __init__(self, optimizer, T_max, eta_min=0):
-        super(CosineAnnealingLR, self).__init__(self)

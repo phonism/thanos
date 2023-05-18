@@ -202,8 +202,8 @@ class NDArray:
         """Return true if array is compact in memory and internal size equals product
         of the shape dimensions"""
         return (
-                self._strides == self.compact_strides(self._shape)
-                and prod(self.shape) == self._handle.size
+            self._strides == self.compact_strides(self._shape)
+            and prod(self.shape) == self._handle.size
         )
 
     def compact(self):
@@ -480,6 +480,16 @@ class NDArray:
 
     ### Elementwise functions
 
+    def sin(self):
+        out = NDArray.make(self.shape, device=self.device)
+        self.device.ewise_sin(self.compact()._handle, out._handle)
+        return out
+
+    def cos(self):
+        out = NDArray.make(self.shape, device=self.device)
+        self.device.ewise_cos(self.compact()._handle, out._handle)
+        return out
+
     def log(self):
         out = NDArray.make(self.shape, device=self.device)
         self.device.ewise_log(self.compact()._handle, out._handle)
@@ -540,7 +550,7 @@ class NDArray:
             else:
                 out = NDArray.make((m, p), device=self.device)
                 self.device.matmul(
-                        self.compact()._handle, other.compact()._handle, out._handle, 1, 1, m, n, p
+                    self.compact()._handle, other.compact()._handle, out._handle, 1, 1, m, n, p
                 )
                 return out
         elif self.ndim == 3 and other.ndim == 3 and self.shape[2] == other.shape[1] and self.shape[0] == other.shape[0]:
@@ -706,6 +716,12 @@ def divide(a, b, dtype):
 
 def power(a, b):
     return a ** b
+
+def sin(a):
+    return a.sin()
+
+def cos(a):
+    return a.cos()
 
 def log(a):
     return a.log()

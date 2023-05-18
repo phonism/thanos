@@ -186,6 +186,56 @@ def test_embedding(device):
     torch_out.sum().backward()
     np.testing.assert_allclose(embed.weight.detach().numpy(), torch_embed.weight.detach().numpy(), atol=1e-5, rtol=1e-5)
 
+class RotaryEmbedding(torch.nn.Module):
+    def __init__(self, dim, max_position_embeddings=2048, base=10000, device=None):
+        super().__init__()
+        inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float().to(device) / dim))
+        self.register_buffer("inv_freq", inv_freq)
+
+        # Build here to make `torch.jit.trace` work.
+        self.max_seq_len_cached = max_position_embeddings
+        t = torch.arange(self.max_seq_len_cached, device=self.inv_freq.device, dtype=self.inv_freq.dtype)
+        freqs = torch.einsum("i,j->ij", t, self.inv_freq)
+        # Different from paper, but it uses a different permutation in order to obtain the same calculation
+        emb = torch.cat((freqs, freqs), dim=-1)
+        self.register_buffer("cos_cached", emb.cos()[None, None, :, :], persistent=False)
+        self.register_buffer("sin_cached", emb.sin()[None, None, :, :], persistent=False)
+
+    def forward(self, x, seq_len=None):
+        # x: [bs, num_attention_heads, seq_len, head_size]
+        # This `if` block is unlikely to be run after we build sin/cos in `__init__`. Keep the logic here just in case.
+        return (
+            self.cos_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
+            self.sin_cached[:, :, :seq_len, ...].to(dtype=x.dtype),
+        )
+
+
+@pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
+def test_rotary_embedding(device):
+    torch_rotary_embed = RotaryEmbedding(64, 32)
+    rotary_embed = thanos.nn.RotaryEmbedding(64, 32)
+
+    np.testing.assert_allclose(
+            torch_rotary_embed.cos_cached.detach().numpy(), 
+            rotary_embed.cos_cached.detach().numpy(), atol=1e-5, rtol=1e-5)
+
+    np.testing.assert_allclose(
+            torch_rotary_embed.sin_cached.detach().numpy(), 
+            rotary_embed.sin_cached.detach().numpy(), atol=1e-5, rtol=1e-5)
+
+    _A = np.random.randn(2, 3, 4, 5).astype(np.float32)
+    A = thanos.Tensor(_A, device=device)
+    TA = torch.Tensor(_A)
+    TA.requires_grad = True
+    torch_res = torch_rotary_embed(TA)
+    res = rotary_embed(A)
+    np.testing.assert_allclose(
+            torch_res[0].detach().numpy(), 
+            res[0].detach().numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(
+            torch_res[1].detach().numpy(), 
+            res[1].detach().numpy(), atol=1e-5, rtol=1e-5)
+
 @pytest.mark.parametrize("shape", SOFTMAX_SHAPES)
 @pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
 def test_silu(shape, device):

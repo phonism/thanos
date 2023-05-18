@@ -303,6 +303,12 @@ class Tensor(Value):
         else:
             return thanos.nn.functional.Equal()(self, other)
 
+    def sin(self):
+        return thanos.nn.functional.Sin()(self)
+
+    def cos(self):
+        return thanos.nn.functional.Cos()(self)
+
     def log(self):
         return thanos.nn.functional.Log()(self)
 

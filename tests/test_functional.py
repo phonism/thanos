@@ -264,20 +264,20 @@ STACK_PARAMETERS = [
     ((5, 5), 0, 1),
     ((5, 5), 0, 2),
     ((1,5,7), 2, 5)]
-@pytest.mark.parametrize("shape, axis, l", STACK_PARAMETERS)
+@pytest.mark.parametrize("shape, dim, l", STACK_PARAMETERS)
 @pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
-def test_stack(shape, axis, l, device):
+def test_stack(shape, dim, l, device):
     _A = [np.random.randn(*shape).astype(np.float32) for i in range(l)]
     A = [thanos.Tensor(_A[i], device=device) for i in range(l)]
     TA = [torch.Tensor(_A[i]) for i in range(l)]
     for torch_a in TA:
         torch_a.requires_grad = True
     np.testing.assert_allclose(
-            torch.stack(TA, dim=axis).detach().numpy(), 
-            F.stack(A, axis=axis).detach().numpy(), atol=1e-5, rtol=1e-5)
+            torch.stack(TA, dim=dim).detach().numpy(), 
+            F.stack(A, dim=dim).detach().numpy(), atol=1e-5, rtol=1e-5)
 
-    torch.stack(TA, dim=axis).sum().backward()
-    F.stack(A, axis=axis).sum().backward()
+    torch.stack(TA, dim=dim).sum().backward()
+    F.stack(A, dim=dim).sum().backward()
     for i in range(l):
         np.testing.assert_allclose(TA[i].grad.numpy(), A[i].grad.numpy(), atol=1e-5, rtol=1e-5)
 

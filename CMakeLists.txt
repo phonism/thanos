@@ -62,8 +62,7 @@ if(CUDA_FOUND)
   # invoke nvidia smi to detect if we really have a GPU
   execute_process(COMMAND "nvidia-smi" ERROR_QUIET  RESULT_VARIABLE NV_RET)
   if(NV_RET EQUAL "0")
-      # TODO
-    CUDA_SELECT_NVCC_ARCH_FLAGS(ARCH_FLAGS 8.6)
+      CUDA_SELECT_NVCC_ARCH_FLAGS(ARCH_FLAGS 8.6)
   else()
     # set to 3.7 the flag of K80
     CUDA_SELECT_NVCC_ARCH_FLAGS(ARCH_FLAGS 3.7)

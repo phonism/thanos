@@ -20,6 +20,8 @@ __device__ scalar_t MUL(scalar_t a, scalar_t b) {return a * b;}
 __device__ scalar_t EQ(scalar_t a, scalar_t b) {return a == b;}
 __device__ scalar_t GE(scalar_t a, scalar_t b) {return a >= b;}
 __device__ scalar_t POWER(scalar_t a, scalar_t b) {return std::pow(a, b);}
+__device__ scalar_t SIN(scalar_t a) {return std::sin(a);}
+__device__ scalar_t COS(scalar_t a) {return std::cos(a);}
 __device__ scalar_t LOG(scalar_t a) {return std::log(a);}
 __device__ scalar_t EXP(scalar_t a) {return std::exp(a);}
 __device__ scalar_t TANH(scalar_t a) {return std::tanh(a);}
@@ -99,37 +101,31 @@ void Fill(CudaArray* out, scalar_t val) {
 
 // Untility function to convert contiguous index i to memory location from strides
 
-__device__ size_t getIndex(CudaVec shape, size_t gid, CudaVec strides) {
-    CudaVec out_cumprod = {1, {1}};
-    size_t size = shape.size;
-    for (size_t i = size-1; i > 0; i--) {
-        out_cumprod.data[out_cumprod.size] = shape.data[i]*out_cumprod.data[out_cumprod.size-1];
-        out_cumprod.size ++;
-    } 
-
-    size_t prod = out_cumprod.data[out_cumprod.size-1];
-    size_t pre_seq_gid = gid / prod;
-    size_t out_gid = pre_seq_gid * strides.data[0];
-    CudaVec out_gid_seq = {1, {1}};
-
-    out_cumprod.size --;
-
-    while (out_cumprod.size) {
-        // printf("getIndex: out_cumprod: %d ", out_cumprod.size);
-        out_gid_seq.data[out_gid_seq.size] = gid / out_cumprod.data[out_cumprod.size-1];
-        out_gid_seq.size ++;
-    
-        size_t seq_gid = out_gid_seq.data[out_gid_seq.size-1] - pre_seq_gid * shape.data[size-out_cumprod.size];
-        pre_seq_gid = out_gid_seq.data[out_gid_seq.size-1];
-        prod = out_cumprod.data[out_cumprod.size-1];
-        out_gid += strides.data[size-out_cumprod.size] * seq_gid;
-    
-        out_cumprod.size --;
+__device__ size_t getIndex(const CudaVec &shape, size_t gid, const CudaVec &strides) {
+    size_t ns = 1, ret = 0;
+    // 展开循环，根据 shape.size 的值手动展开
+    if (shape.size >= 4) {
+        int idx = gid / ns % shape.data[3];
+        ret += strides.data[3] * idx;
+        ns *= shape.data[3];
     }
-    
-    return out_gid;
+    if (shape.size >= 3) {
+        int idx = gid / ns % shape.data[2];
+        ret += strides.data[2] * idx;
+        ns *= shape.data[2];
+    }
+    if (shape.size >= 2) {
+        int idx = gid / ns % shape.data[1];
+        ret += strides.data[1] * idx;
+        ns *= shape.data[1];
+    }
+    if (shape.size >= 1) {
+        int idx = gid / ns % shape.data[0];
+        ret += strides.data[0] * idx;
+        ns *= shape.data[0];
+    }
+    return ret;
 }
-
 
 __global__ void CompactKernel(
         const scalar_t* a, scalar_t* out, size_t size, CudaVec shape,
@@ -149,7 +145,8 @@ __global__ void CompactKernel(
     size_t gid = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (gid < size) {
-        out[gid] = a[offset+getIndex(shape, gid, strides)];
+        size_t ret = getIndex(shape, gid, strides);
+        out[gid] = a[offset + ret];
     }
 }
 
@@ -173,8 +170,7 @@ void Compact(
 
     // Nothing needs to be added here
     CudaDims dim = CudaOneDim(out->size);
-    CompactKernel<<<dim.grid, dim.block>>>(a.ptr, out->ptr, out->size, VecToCuda(shape),
-            VecToCuda(strides), offset);
+    CompactKernel<<<dim.grid, dim.block>>>(a.ptr, out->ptr, out->size, VecToCuda(shape), VecToCuda(strides), offset);
 }
 
 __global__ void EwiseSetitemKernel(
@@ -404,6 +400,24 @@ void ScalarGe(const CudaArray& a, scalar_t val, CudaArray* out) {
     ScalarGeKernel<<<dim.grid, dim.block>>>(a.ptr, val, out->ptr, out->size);
 }
 
+__global__ void EwiseSinKernel(const scalar_t* a, scalar_t* out, size_t size) {
+    EwiseOperatorKernel(a, out, size, SIN);
+}
+
+void EwiseSin(const CudaArray& a, CudaArray* out) {
+    CudaDims dim = CudaOneDim(out->size);
+    EwiseSinKernel<<<dim.grid, dim.block>>>(a.ptr, out->ptr, out->size);
+}
+
+__global__ void EwiseCosKernel(const scalar_t* a, scalar_t* out, size_t size) {
+    EwiseOperatorKernel(a, out, size, COS);
+}
+
+void EwiseCos(const CudaArray& a, CudaArray* out) {
+    CudaDims dim = CudaOneDim(out->size);
+    EwiseCosKernel<<<dim.grid, dim.block>>>(a.ptr, out->ptr, out->size);
+}
+
 __global__ void EwiseLogKernel(const scalar_t* a, scalar_t* out, size_t size) {
     EwiseOperatorKernel(a, out, size, LOG);
 }
@@ -495,12 +509,14 @@ __global__ void MatmulTileKernel(
 
         // Multiply Asub and Bsub together 
         for (int k = 0; k < TILE; ++k) {
+            __syncthreads();
             Outvalue += As[tidr][k] * Bs[k][tidc];
         }
+        
 
         // Synchronize to make sure that the preceding computation is done before  
         // loading two new sub-matrices of A and B in the next iteration 
-        __syncthreads();
+        // __syncthreads();
     }
 
     // Write Outvalue to device memory  
@@ -567,7 +583,7 @@ void ReduceMax(const CudaArray& a, CudaArray* out, size_t reduce_size) {
      * Args:
      *   a: compact array of size a.size = out.size * reduce_size to reduce over
      *   out: compact array to write into
-     *   redice_size: size of the dimension to reduce over
+     i   redice_size: size of the dimension to reduce over
      */
     CudaDims dim = CudaOneDim(out->size);
     ReduceMaxKernel<<<dim.grid, dim.block>>>(a.ptr, out->ptr, out->size, reduce_size);
@@ -587,7 +603,6 @@ __global__ void ReduceSumKernel(const scalar_t* a, scalar_t* out, size_t out_siz
     }
 }
 
-
 void ReduceSum(const CudaArray& a, CudaArray* out, size_t reduce_size) {
     /**
      * Reduce by taking summation over `reduce_size` contiguous blocks.  Again, for simplicity you 
@@ -598,6 +613,7 @@ void ReduceSum(const CudaArray& a, CudaArray* out, size_t reduce_size) {
      *   out: compact array to write into
      *   reduce_size: size of the dimension to reduce over
      */
+     
     CudaDims dim = CudaOneDim(out->size);
     ReduceSumKernel<<<dim.grid, dim.block>>>(a.ptr, out->ptr, out->size, reduce_size);
 }
@@ -691,6 +707,8 @@ PYBIND11_MODULE(ndarray_backend_cuda, m) {
     m.def("ewise_ge", EwiseGe);
     m.def("scalar_ge", ScalarGe);
     
+    m.def("ewise_sin", EwiseSin);
+    m.def("ewise_cos", EwiseCos);
     m.def("ewise_log", EwiseLog);
     m.def("ewise_sqrt", EwiseSqrt);
     m.def("ewise_exp", EwiseExp);

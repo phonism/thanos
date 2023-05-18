@@ -307,6 +307,24 @@ void ScalarGe(const AlignedArray& a, scalar_t val, AlignedArray* out) {
     }
 }
 
+void EwiseSin(const AlignedArray& a, AlignedArray* out) {
+    /**
+     * Set entries in out to be the multiply of correspondings entires in a and b.
+     */
+    for (size_t i = 0; i < a.size; i++) {
+        out->ptr[i] = std::sin(a.ptr[i]);
+    }
+}
+
+void EwiseCos(const AlignedArray& a, AlignedArray* out) {
+    /**
+     * Set entries in out to be the multiply of correspondings entires in a and b.
+     */
+    for (size_t i = 0; i < a.size; i++) {
+        out->ptr[i] = std::cos(a.ptr[i]);
+    }
+}
+
 void EwiseLog(const AlignedArray& a, AlignedArray* out) {
     /**
      * Set entries in out to be the multiply of correspondings entires in a and b.
@@ -636,6 +654,8 @@ PYBIND11_MODULE(ndarray_backend_cpu, m) {
     m.def("scalar_eq", ScalarEq);
     m.def("ewise_ge", EwiseGe);
     m.def("scalar_ge", ScalarGe);
+    m.def("ewise_sin", EwiseSin);
+    m.def("ewise_cos", EwiseCos);
     m.def("ewise_log", EwiseLog);
     m.def("ewise_exp", EwiseExp);
     m.def("ewise_tanh", EwiseTanh);
