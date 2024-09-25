@@ -37,6 +37,34 @@ def test_reduce_sum():
         print(all_time)
         print("==================")
 
+def test_matmul_triton():
+    def matmul_test(A, B):
+        start_time = time.time()
+        ans = A @ B
+        return time.time() - start_time
+
+    shapes_a = [(4096, 1024), (512, 512), (512 * 64, 8), (8, 512 * 64), (8, 512 * 64)]
+    shapes_b = [(1024, 8192), (512, 512), (8, 512 * 64), (512 * 64, 8), (512 * 64, 8)]
+    #shapes = [(8, 3, 2)]
+    axis = [1, 1, 1, 0, 0]
+    #shapes = [(3, 4)]
+    for idx in range(len(shapes_a)):
+        shape_a = shapes_a[idx]
+        shape_b = shapes_b[idx]
+        print(shape_a, shape_b)
+        all_time = 0
+        for i in range(10):
+            _A = torch.rand(*shape_a, device=torch.device("cuda"))
+            A = thanos.NDArray(_A)
+            _B = torch.rand(*shape_b, device=torch.device("cuda"))
+            B = thanos.NDArray(_B)
+            #TA = torch.tensor(_A)
+            #print(A)
+            #print(torch.sum(TA, dim=axis[idx]))
+            all_time += matmul_test(A, B)
+        print(all_time)
+        print("==================")
+
 def test_matmul():
     def matmul_test(A, B):
         start_time = time.time()
@@ -92,5 +120,18 @@ def test_matmul_torch():
             all_time += matmul_test(A, B)
         print(all_time)
         print("==================")
+
+_A = np.random.randn(1).astype(np.float32)
+A = thanos.Tensor(_A, device=thanos.cuda())
+_B = np.random.randn(1).astype(np.float32)
+B = thanos.Tensor(_B, device=thanos.cuda())
+print(_A + _B)
+print(A)
+print(B)
+print(A + B)
+
+test_matmul_triton()
+print("-------------------------------------------------------")
 test_matmul()
+print("--------------------")
 test_matmul_torch()

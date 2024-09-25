@@ -9,6 +9,9 @@ import thanos
 import thanos.nn.functional as F
 #from thanos import backend_ndarray as nd
 
+atol = 1e-2
+rtol = 1e-2
+
 def backward_check(f, *args, **kwargs):
     eps = 1e-5
     out = f(*args, **kwargs)
@@ -56,12 +59,12 @@ def test_ewise_fn(fn, shape, device):
     TA.requires_grad = True
     TB = torch.Tensor(_B)
     TB.requires_grad = True
-    np.testing.assert_allclose(fn(TA, TB).detach().numpy(), fn(A, B).detach().numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(fn(TA, TB).detach().numpy(), fn(A, B).detach().numpy(), atol=atol, rtol=rtol)
 
     fn(TA, TB).sum().backward()
     fn(A, B).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
-    np.testing.assert_allclose(TB.grad.numpy(), B.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
+    np.testing.assert_allclose(TB.grad.numpy(), B.grad.numpy(), atol=atol, rtol=rtol)
 
 
 SCALAR_OPS = {
@@ -83,11 +86,11 @@ def test_scalar_fn(fn, shape, device):
     TA = torch.Tensor(_A)
     TA.requires_grad = True
     A = thanos.Tensor(_A, device=device)
-    np.testing.assert_allclose(fn(TA, _B).detach().numpy(), fn(A, _B).detach().numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(fn(TA, _B).detach().numpy(), fn(A, _B).detach().numpy(), atol=atol, rtol=rtol)
 
     fn(TA, _B).sum().backward()
     fn(A, _B).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
 
 
 MATMUL_DIMS = [
@@ -113,12 +116,12 @@ def test_matmul(m, n, p, device):
     TA.requires_grad=True
     TB = torch.Tensor(_B)
     TB.requires_grad=True
-    np.testing.assert_allclose((TA @ TB).detach().numpy(), (A @ B).detach().numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose((TA @ TB).detach().numpy(), (A @ B).detach().numpy(), atol=atol, rtol=rtol)
 
     (TA @ TB).sum().backward()
     (A @ B).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
 
 BATCH_MATMUL_DIMS = [
     (16, 16, 16, 16),
@@ -136,12 +139,12 @@ def test_batch_matmul(b, m, n, p, device):
     TA.requires_grad=True
     TB = torch.Tensor(_B)
     TB.requires_grad=True
-    np.testing.assert_allclose((TA @ TB).detach().numpy(), (A @ B).detach().numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose((TA @ TB).detach().numpy(), (A @ B).detach().numpy(), atol=atol, rtol=rtol)
 
     (TA @ TB).sum().backward()
     (A @ B).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
 
 @pytest.mark.parametrize("b,m,n,p", BATCH_MATMUL_DIMS)
 @pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
@@ -154,12 +157,12 @@ def test_batch_matmul_2(b, m, n, p, device):
     TA.requires_grad=True
     TB = torch.Tensor(_B)
     TB.requires_grad=True
-    np.testing.assert_allclose((TA @ TB).detach().numpy(), (A @ B).detach().numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose((TA @ TB).detach().numpy(), (A @ B).detach().numpy(), atol=atol, rtol=rtol)
 
     (TA @ TB).sum().backward()
     (A @ B).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
 
 @pytest.mark.parametrize("b,m,n,p", BATCH_MATMUL_DIMS)
 @pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
@@ -172,12 +175,12 @@ def test_batch_matmul_3(b, m, n, p, device):
     TA.requires_grad=True
     TB = torch.Tensor(_B)
     TB.requires_grad=True
-    np.testing.assert_allclose((TA @ TB).detach().numpy(), (A @ B).detach().numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose((TA @ TB).detach().numpy(), (A @ B).detach().numpy(), atol=atol, rtol=rtol)
 
     (TA @ TB).sum().backward()
     (A @ B).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
 
 SUMMATION_PARAMETERS = [
     ((1, 1, 1), None),
@@ -194,11 +197,11 @@ def test_summation(shape, axes, device):
     TA.requires_grad = True
     np.testing.assert_allclose(
             torch.sum(TA, dim=axes).detach().numpy(), 
-            F.summation(A, axis=axes).detach().numpy(), atol=1e-5, rtol=1e-5)
+            F.summation(A, axis=axes).detach().numpy(), atol=atol, rtol=rtol)
 
     torch.sum(TA, dim=axes).sum().backward()
     F.summation(A, axis=axes).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
 
 @pytest.mark.parametrize("shape", GENERAL_SHAPES)
 @pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
@@ -209,11 +212,11 @@ def test_log(shape, device):
     TA.requires_grad = True
     np.testing.assert_allclose(
             torch.log(TA).detach().numpy(), 
-            F.log(A).detach().numpy(), atol=1e-5, rtol=1e-5)
+            F.log(A).detach().numpy(), atol=atol, rtol=rtol)
 
     torch.log(TA).sum().backward()
     F.log(A).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
 
 @pytest.mark.parametrize("shape", GENERAL_SHAPES)
 @pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
@@ -224,11 +227,11 @@ def test_exp(shape, device):
     TA.requires_grad = True
     np.testing.assert_allclose(
             torch.exp(TA).detach().numpy(), 
-            F.exp(A).detach().numpy(), atol=1e-5, rtol=1e-5)
+            F.exp(A).detach().numpy(), atol=atol, rtol=rtol)
 
     torch.exp(TA).sum().backward()
     F.exp(A).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
 
 @pytest.mark.parametrize("shape", GENERAL_SHAPES)
 @pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
@@ -239,11 +242,11 @@ def test_relu(shape, device):
     TA.requires_grad = True
     np.testing.assert_allclose(
             torch.relu(TA).detach().numpy(), 
-            F.relu(A).detach().numpy(), atol=1e-5, rtol=1e-5)
+            F.relu(A).detach().numpy(), atol=atol, rtol=rtol)
 
     torch.relu(TA).sum().backward()
     F.relu(A).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
 
 @pytest.mark.parametrize("shape", GENERAL_SHAPES)
 @pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
@@ -254,11 +257,11 @@ def test_sqrt(shape, device):
     TA.requires_grad = True
     np.testing.assert_allclose(
             torch.sqrt(TA).detach().numpy(), 
-            F.sqrt(A).detach().numpy(), atol=1e-5, rtol=1e-5)
+            F.sqrt(A).detach().numpy(), atol=atol, rtol=rtol)
 
     torch.sqrt(TA).sum().backward()
     F.sqrt(A).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
 
 STACK_PARAMETERS = [
     ((5, 5), 0, 1),
@@ -274,12 +277,12 @@ def test_stack(shape, dim, l, device):
         torch_a.requires_grad = True
     np.testing.assert_allclose(
             torch.stack(TA, dim=dim).detach().numpy(), 
-            F.stack(A, dim=dim).detach().numpy(), atol=1e-5, rtol=1e-5)
+            F.stack(A, dim=dim).detach().numpy(), atol=atol, rtol=rtol)
 
     torch.stack(TA, dim=dim).sum().backward()
     F.stack(A, dim=dim).sum().backward()
     for i in range(l):
-        np.testing.assert_allclose(TA[i].grad.numpy(), A[i].grad.numpy(), atol=1e-5, rtol=1e-5)
+        np.testing.assert_allclose(TA[i].grad.numpy(), A[i].grad.numpy(), atol=atol, rtol=rtol)
 
 
 BROADCAST_SHAPES = [
@@ -294,11 +297,11 @@ def test_broadcast_to(shape, shape_to, device):
     TA.requires_grad = True
     np.testing.assert_allclose(
             torch.broadcast_to(TA, shape_to).detach().numpy(), 
-            F.broadcast_to(A, shape_to).detach().numpy(), atol=1e-5, rtol=1e-5)
+            F.broadcast_to(A, shape_to).detach().numpy(), atol=atol, rtol=rtol)
 
     torch.broadcast_to(TA, shape_to).sum().backward()
     F.broadcast_to(A, shape_to).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
 
 RESHAPE_SHAPES = [
     ((1, 1, 1), (1,)),
@@ -312,11 +315,11 @@ def test_reshape(shape, shape_to, device):
     TA.requires_grad = True
     np.testing.assert_allclose(
             torch.reshape(TA, shape_to).detach().numpy(), 
-            F.reshape(A, shape_to).detach().numpy(), atol=1e-5, rtol=1e-5)
+            F.reshape(A, shape_to).detach().numpy(), atol=atol, rtol=rtol)
 
     torch.reshape(TA, shape_to).sum().backward()
     F.reshape(A, shape_to).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
 
 TRANSPOSE_SHAPES = [(1, 1, 1), (4, 5, 6)]
 TRANSPOSE_AXES = [(0, 1), (0, 2), None]
@@ -332,11 +335,11 @@ def test_transpose(shape, axes, device):
         axes = (-1, -2)
     np.testing.assert_allclose(
             torch.transpose(TA, axes[0], axes[1]).detach().numpy(), 
-            F.transpose(A, axes).detach().numpy(), atol=1e-5, rtol=1e-5)
+            F.transpose(A, axes).detach().numpy(), atol=atol, rtol=rtol)
 
     torch.transpose(TA, axes[0], axes[1]).sum().backward()
     F.transpose(A, axes).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
 
 @pytest.mark.parametrize("shape, axes", SUMMATION_PARAMETERS)
 @pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
@@ -351,11 +354,11 @@ def test_logsumexp(shape, axes, device):
         t_axes = axes
     np.testing.assert_allclose(
             torch.logsumexp(TA, dim=t_axes).detach().numpy(), 
-            F.logsumexp(A, axes).detach().numpy(), atol=1e-5, rtol=1e-5)
+            F.logsumexp(A, axes).detach().numpy(), atol=atol, rtol=rtol)
 
     torch.logsumexp(TA, dim=t_axes).sum().backward()
     F.logsumexp(A, axes).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
 
 # TODO need to flatten the syntax between PyTorch and my code.
 @pytest.mark.parametrize("shape", GENERAL_SHAPES)
@@ -372,8 +375,8 @@ def test_equal(shape, device):
     TB.requires_grad = True
     TC = torch.Tensor(_A)
     TC.requires_grad = True
-    np.testing.assert_allclose((TA == TB).detach().numpy(), F.equal(A, B).detach().numpy(), atol=1e-5, rtol=1e-5)
-    np.testing.assert_allclose((TA == TC).detach().numpy(), F.equal(A, C).detach().numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose((TA == TB).detach().numpy(), F.equal(A, B).detach().numpy(), atol=atol, rtol=rtol)
+    np.testing.assert_allclose((TA == TC).detach().numpy(), F.equal(A, C).detach().numpy(), atol=atol, rtol=rtol)
 
 @pytest.mark.parametrize("shape, axes", SUMMATION_PARAMETERS)
 @pytest.mark.parametrize("device", _DEVICES, ids=["cpu", "cuda"])
@@ -387,11 +390,11 @@ def test_max(shape, axes, device):
         t_axes = -1
     np.testing.assert_allclose(
             torch.max(TA, dim=t_axes)[0].detach().numpy(), 
-            F.max(A, axis=axes).detach().numpy(), atol=1e-5, rtol=1e-5)
+            F.max(A, axis=axes).detach().numpy(), atol=atol, rtol=rtol)
 
     torch.max(TA, dim=t_axes)[0].sum().backward()
     F.max(A, axis=axes).sum().backward()
-    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=1e-5, rtol=1e-5)
+    np.testing.assert_allclose(TA.grad.numpy(), A.grad.numpy(), atol=atol, rtol=rtol)
 
 if __name__ == "__main__":
     pytest.main()

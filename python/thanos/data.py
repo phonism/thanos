@@ -80,13 +80,14 @@ class DataLoader:
     r"""
     Data loader. Combines a dataset and a sampler, and provides an iterable over
     the given dataset.
+
     Args:
         dataset (Dataset): dataset from which to load the data.
-        batch_size (int, optional): how many samples per batch to load
-            (default: ``1``).
-        shuffle (bool, optional): set to ``True`` to have the data reshuffled
-            at every epoch (default: ``False``).
-     """
+
+        batch_size (int, optional): how many samples per batch to load (default: ``1``).
+
+        shuffle (bool, optional): set to ``True`` to have the data reshuffled at every epoch (default: ``False``).
+    """
     dataset: Dataset
     batch_size: Optional[int]
 

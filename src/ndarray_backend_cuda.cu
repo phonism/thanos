@@ -595,7 +595,9 @@ __global__ void ReduceSumKernel(const scalar_t* a, scalar_t* out, size_t out_siz
     scalar_t sum = 0;
 
     if (tid < out_size) {
-        for (int i = tid * reduce_size; i < (tid + 1) * reduce_size; i++) sum+=a[i];
+        for (int i = tid * reduce_size; i < (tid + 1) * reduce_size; i++) {
+            sum += a[i];
+        }
         __syncthreads();
 
         // printf("sum: %.3f\n", sum);

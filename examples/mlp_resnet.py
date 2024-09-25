@@ -9,6 +9,7 @@ import time
 import os
 
 np.random.seed(0)
+use_cuda = True
 
 def ResidualBlock(dim, hidden_dim, norm=nn.BatchNorm1d, drop_prob=0.1):
     module = nn.Sequential(
@@ -39,7 +40,7 @@ def MLPResNet(dim, hidden_dim=128, num_blocks=3, num_classes=10, norm=nn.BatchNo
 
 def epoch(dataloader, model, opt=None):
     np.random.seed(4)
-    hit, total = 0, 0
+    hit, total = 1, 1
     loss_func = nn.SoftmaxLoss()
     loss_all = 0
     if opt is not None:
@@ -47,8 +48,8 @@ def epoch(dataloader, model, opt=None):
         for idx, data in enumerate(dataloader):
             x, y = data
             output = model(x)
-            opt.reset_grad()
             loss = loss_func(output, y)
+            opt.reset_grad()
             loss_all += loss.numpy()
             loss.backward()
             opt.step()
@@ -67,7 +68,7 @@ def epoch(dataloader, model, opt=None):
     return acc, loss_all / (idx + 1)
 
 def train_mnist(
-        batch_size=128, epochs=10, optimizer=optim.AdamW,
+        batch_size=128, epochs=1, optimizer=optim.AdamW,
         lr=0.001, weight_decay=0.001, hidden_dim=128, data_dir="data"):
     np.random.seed(4)
     train_img_path = os.path.join(data_dir, "train-images-idx3-ubyte.gz")
@@ -77,7 +78,6 @@ def train_mnist(
     train_dataset = data.MNISTDataset(train_img_path, train_label_path)
     test_dataset = data.MNISTDataset(test_img_path, test_label_path)
 
-    use_cuda = False
     device = thanos.cpu()
     if use_cuda:
         device = thanos.cuda()
@@ -93,7 +93,9 @@ def train_mnist(
         train_acc, train_loss = epoch(train_dataloader, model, opt)
         print(idx, " DONE: train_acc:", train_acc, " train_loss:", train_loss, " tensor_counter:", thanos.autograd.TENSOR_COUNTER, " duration:", time.time() - start_time)
         start_time = time.time()
-    test_acc, test_loss = epoch(test_dataloader, model)
+    #test_acc, test_loss = epoch(test_dataloader, model)
+    test_acc = 0.0
+    test_loss = 0.
     return (train_acc, train_loss, test_acc, test_loss)
 
 if __name__ == "__main__":

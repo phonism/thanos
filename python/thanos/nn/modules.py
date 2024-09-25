@@ -109,6 +109,10 @@ class Module:
         for idx in range(len(self._children())):
             self._children()[idx].cuda()
 
+    def forward(self, *args, **kwargs):
+        """定义forward方法。子类需要重写此方法。"""
+        raise NotImplementedError("forward method not implemented.")
+
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
 
@@ -191,11 +195,9 @@ class BatchNorm1d(Module):
         if self.training:
             batch = x.shape[0]
             mean = F.summation(x, axis=0) / batch
-            # remember to detach the mean
             self.running_mean = (self.momentum * mean.detach() + (1 - self.momentum) * self.running_mean).detach()
             mean = F.broadcast_to(F.reshape(mean, (1, self.dim)), x.shape)
             var = F.summation((x - mean) ** 2, axis=0) / batch
-            # remember to detach the var
             self.running_var = (self.momentum * var.detach() + (1 - self.momentum) * self.running_var).detach()
             var = F.broadcast_to(F.reshape(var, (1, self.dim)), x.shape)
         else:
@@ -277,10 +279,10 @@ class Embedding(Module):
 class RotaryEmbedding(Module):
     def __init__(self, dim, max_position_embeddings=2048, base=10000):
         super().__init__()
-        self.inv_freq = thanos.Tensor(1.0 / (base ** (np.arange(0, dim, 2) / dim)))
+        self.inv_freq = thanos.Tensor(1.0 / (base ** (np.arange(0, dim, 2).astype(np.float32) / dim)))
 
         self.max_seq_len_cached = max_position_embeddings
-        t = thanos.Tensor(np.arange(self.max_seq_len_cached, dtype=self.inv_freq.dtype))
+        t = thanos.Tensor(np.arange(self.max_seq_len_cached, dtype="float32"))
         t = F.reshape(t, (t.shape[0], 1))
         self.inv_freq = F.reshape(self.inv_freq, (1, self.inv_freq.shape[0]))
         freqs = t @ self.inv_freq

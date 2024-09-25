@@ -40,7 +40,7 @@ def randb(*shape, p=0.5, device=None, dtype="bool", requires_grad=False):
 def one_hot(n, i, device=None, dtype="float32", requires_grad=False):
     """ Generate one-hot encoding Tensor """
     device = thanos.cpu() if device is None else device
-    return thanos.Tensor(device.one_hot(n,i.numpy(), dtype=dtype), device=device, requires_grad=requires_grad)
+    return thanos.Tensor(device.one_hot(n,i.numpy(), dtype="float32"), device=device, requires_grad=requires_grad)
 
 def xavier_uniform(fan_in, fan_out, gain=1.0, **kwargs):
     a = gain * math.sqrt(6 / (fan_in + fan_out))

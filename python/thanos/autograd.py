@@ -17,53 +17,40 @@ class Op:
         raise NotImplementedError()
 
     def compute(self, *args) -> NDArray:
-        """Calculate forward pass of operator.
+        """
+        Calculate forward pass of operator.
 
-        Parameters
-        ----------
-        input: NDArray
-            A list of input arrays to the function
+        Args:
+            input (NDArray): A list of input arrays to the function
 
-        Returns
-        -------
-        output: Array
-            Array output of the operation
+        Returns:
+            Array: Array output of the operation
         """
         raise NotImplementedError()
 
     def gradient(self, out_grad: "Value", node: "Value") -> Union["Value", Tuple["Value"]]:
-        """Compute partial adjoint for each input value for a given output adjoint.
+        """
+        Compute partial adjoint for each input value for a given output adjoint.
 
-        Parameters
-        ----------
-        out_grad: Value
-            The adjoint wrt to the output value.
+        Args:
+            out_grad (Value): The adjoint with respect to the output value. 
+            node (Value): The value node of forward evaluation.
 
-        node: Value
-            The value node of forward evaluation.
-
-        Returns
-        -------
-        input_grads: Value or Tuple[Value]
-            A list containing partial gradient adjoints to be propagated to each of the input node.
+        Returns:
+            Value or Tuple[Value]: A list containing partial gradient adjoints to be propagated to each of the input node.
         """
         raise NotImplementedError()
 
     def gradient_as_tuple(self, out_grad: "Value", node: "Value") -> Tuple["Value"]:
-        """Convenience method to always return a tuple from gradient call
+        """
+        Convenience method to always return a tuple from gradient call
 
-        Parameters
-        ----------
-        out_grad: Value
-            The adjoint wrt to the output value
+        Args:
+            out_grad (Value): The adjoint wrt to the output value
+            node (Value): The Value node of forward evaluation
 
-        node: Value
-            The Value node of forward evaluation
-
-        Returns
-        -------
-        input_grads: Tuple[Value]
-            A tuple containing partial gradient adjoints to be propagated to each of the input node.
+        Returns:
+            Tuple[Value]: A tuple containing partial gradient adjoints to be propagated to each of the input node.
         """
         output = self.gradient(out_grad, node)
         if isinstance(output, tuple):
@@ -103,7 +90,7 @@ class Value:
         """
         return self.op is None
 
-    def _init(
+    def init(
             self,
             op: Optional[Op],
             inputs: List["Tensor"],
@@ -111,6 +98,16 @@ class Value:
             num_outputs: int = 1,
             cached_data: List[object] = None,
             requires_grad: Optional[bool] = None):
+        """
+        Initialize a new Tensor object with the given operation and input tensors.
+
+        Args:
+            op (Optional[Op]): The operation producing this tensor, if any. It can be None if the tensor is created directly without an operation.
+            inputs (List["Tensor"]): A list of input Tensor objects that this tensor depends on.
+            num_outputs (int, optional): The number of outputs the operation produces. Default is 1.
+            cached_data (List[object], optional): Pre-computed data or intermediates that can be reused. None by default.
+            requires_grad (Optional[bool], optional): Whether this tensor requires the computation of gradients. If None, it is inferred from the input tensors.
+        """
         global TENSOR_COUNTER
         TENSOR_COUNTER += 1
 
@@ -140,7 +137,7 @@ class Value:
         make const
         """
         value = cls.__new__(cls)
-        value._init(None, [], cached_data=data, requires_grad=requires_grad)
+        value.init(None, [], cached_data=data, requires_grad=requires_grad)
         return value
 
     @classmethod
@@ -149,7 +146,7 @@ class Value:
         make from op
         """
         value = cls.__new__(cls)
-        value._init(op, inputs)
+        value.init(op, inputs)
         if not value.requires_grad:
             return value.detach()
         value.realize_cached_data()
@@ -176,7 +173,7 @@ class Tensor(Value):
             device = device if device else default_device()
             cached_data = Tensor._array_from_numpy(array, device=device, dtype=dtype)
 
-        self._init(None, [], cached_data=cached_data, requires_grad=requires_grad)
+        self.init(None, [], cached_data=cached_data, requires_grad=requires_grad)
 
     @staticmethod
     def _array_from_numpy(numpy_array, device, dtype):
@@ -190,7 +187,7 @@ class Tensor(Value):
         make from op
         """
         tensor = Tensor.__new__(Tensor)
-        tensor._init(op, inputs)
+        tensor.init(op, inputs)
         tensor.realize_cached_data()
         return tensor
 
@@ -201,9 +198,9 @@ class Tensor(Value):
         """
         tensor = Tensor.__new__(Tensor)
         if isinstance(data, Tensor):
-            tensor._init(None, [], cached_data=data.realize_cached_data(), requires_grad=requires_grad)
+            tensor.init(None, [], cached_data=data.realize_cached_data(), requires_grad=requires_grad)
         else:
-            tensor._init(None, [], cached_data=data, requires_grad=requires_grad)
+            tensor.init(None, [], cached_data=data, requires_grad=requires_grad)
         return tensor
 
     @property
@@ -251,7 +248,7 @@ class Tensor(Value):
 
     def __getitem__(self, index):
         tensor = Tensor.__new__(Tensor)
-        tensor._init(None, [], cached_data=self.realize_cached_data()[index], requires_grad=self.requires_grad)
+        tensor.init(None, [], cached_data=self.realize_cached_data()[index], requires_grad=self.requires_grad)
         return tensor
 
     def __str__(self):
@@ -321,11 +318,11 @@ class Tensor(Value):
     def reshape(self, shape):
         return thanos.nn.functional.Reshape(shape)(self)
 
-    def summation(self, axis=None):
-        return thanos.nn.functional.Summation(axis)(self)
+    def summation(self, axis=None, keepdims=False):
+        return thanos.nn.functional.Summation(axis, keepdism=keepdims)(self)
 
-    def sum(self, axis=None):
-        return thanos.nn.functional.Summation(axis)(self)
+    def sum(self, axis=None, keepdims=False):
+        return thanos.nn.functional.Summation(axis, keepdims=keepdims)(self)
 
     def broadcast_to(self, shape):
         return thanos.nn.functional.BroadcastTo(shape)(self)

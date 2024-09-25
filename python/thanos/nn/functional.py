@@ -302,13 +302,13 @@ class Summation(TensorOp):
                 new_axis.append(x)
             else:
                 new_axis.append(x + len(hs.shape))
-        for x in sorted(new_axis):
-            grad_shape.insert(x, 1)
+        if self.keepdims is False: 
+            for x in sorted(new_axis):
+                grad_shape.insert(x, 1)
         return broadcast_to(reshape(out_grad, grad_shape), hs.shape).detach()
 
 def summation(a, axis=None, keepdims=False):
     return Summation(axis, keepdims)(a)
-
 
 class Matmul(TensorOp):
     def compute(self, a, b):
@@ -333,7 +333,6 @@ class Matmul(TensorOp):
             if pre_b == 1:
                 b = array_api.broadcast_to(b, (a.shape[0], b.shape[1], b.shape[2]))
 
-
         c = a @ b
         if len(a_shape) > 2 or len(b_shape) > 2:
             if pre_a >= pre_b:
@@ -357,6 +356,9 @@ class Matmul(TensorOp):
         if dim3 > dim2:
             rhs_grad = summation(rhs_grad, tuple(range(dim3 - dim2)))
         return lhs_grad.detach(), rhs_grad.detach()
+
+    def get_total_time(self):
+        return self.total_time
 
 def matmul(a, b):
     return Matmul()(a, b)
@@ -443,8 +445,9 @@ class Max(TensorOp):
                 new_axis.append(x)
             else:
                 new_axis.append(x + len(hs.shape))
-        for x in sorted(new_axis):
-            grad_shape.insert(x, 1)
+        if self.keepdims is False:
+            for x in sorted(new_axis):
+                grad_shape.insert(x, 1)
         mask = hs.equal(broadcast_to(max(hs, axis=self.axis, keepdims=True), hs.shape))
         return (broadcast_to(reshape(out_grad, grad_shape), hs.shape) * mask).detach()
 
@@ -489,7 +492,9 @@ class Split(TensorTupleOp):
             idx_i[self.axis] = i
             idx_i = tuple(idx_i)
             out = x[idx_i]
-            out = out.sum(axis=self.axis)
+            # TODO wwwwwwwwwwwwwhhhhhhhhhhhhyyyy?
+            if len(out.shape) == len(x.shape):
+                out = out.sum(axis=self.axis)
             results.append(out)
         return tuple(results)
 

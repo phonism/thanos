@@ -3,6 +3,9 @@ import thanos
 import numpy as np
 
 class Optimizer:
+    """
+    optimizer
+    """
     def __init__(self, params):
         self.params = params
 

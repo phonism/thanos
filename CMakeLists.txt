@@ -2,13 +2,13 @@ cmake_minimum_required(VERSION 3.2)
 project(thanos C CXX)
 
 # find correct version of Python
-execute_process(COMMAND python3-config --prefix
+execute_process(COMMAND python3.10-config --prefix
   OUTPUT_VARIABLE Python_ROOT_DIR)
-find_package(Python COMPONENTS Development Interpreter REQUIRED)
-include_directories(${Python_INCLUDE_DIRS})
+find_package(Python3 3.10 EXACT COMPONENTS Development Interpreter REQUIRED)
+include_directories(${Python3_INCLUDE_DIRS})
 
 # find pybind
-execute_process(COMMAND python3 -m pybind11 --cmakedir
+execute_process(COMMAND python3.10 -m pybind11 --cmakedir
   RESULT_VARIABLE __pybind_exit_code
   OUTPUT_VARIABLE __pybind_path
   OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -48,6 +48,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 endif()
 
 
+set(CMAKE_CUDA_FLAGS_DEBUG "-g")
 
 ####################
 ### CUDA BACKEND ###
@@ -62,7 +63,7 @@ if(CUDA_FOUND)
   # invoke nvidia smi to detect if we really have a GPU
   execute_process(COMMAND "nvidia-smi" ERROR_QUIET  RESULT_VARIABLE NV_RET)
   if(NV_RET EQUAL "0")
-      CUDA_SELECT_NVCC_ARCH_FLAGS(ARCH_FLAGS 8.6)
+      CUDA_SELECT_NVCC_ARCH_FLAGS(ARCH_FLAGS Auto)
   else()
     # set to 3.7 the flag of K80
     CUDA_SELECT_NVCC_ARCH_FLAGS(ARCH_FLAGS 3.7)
@@ -70,10 +71,14 @@ if(CUDA_FOUND)
 
   # set arch flags properly
   CUDA_ADD_LIBRARY(ndarray_backend_cuda MODULE src/ndarray_backend_cuda.cu OPTIONS ${ARCH_FLAGS})
+  CUDA_ADD_LIBRARY(ndarray_backend_triton MODULE src/ndarray_backend_triton.cu OPTIONS ${ARCH_FLAGS})
 
   target_link_libraries(ndarray_backend_cuda ${LINKER_LIBS})
+  target_link_libraries(ndarray_backend_triton ${LINKER_LIBS})
   pybind11_extension(ndarray_backend_cuda)
   pybind11_strip(ndarray_backend_cuda)
+  pybind11_extension(ndarray_backend_triton)
+  pybind11_strip(ndarray_backend_triton)
 
   # directly output to ffi folder
   set_target_properties(ndarray_backend_cuda
@@ -81,7 +86,14 @@ if(CUDA_FOUND)
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/thanos/backend_ndarray
     CXX_VISIBILITY_PRESET "hidden"
     CUDA_VISIBILITY_PRESET "hidden"
-)
+  )
+
+  set_target_properties(ndarray_backend_triton
+    PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/thanos/backend_ndarray
+    CXX_VISIBILITY_PRESET "hidden"
+    CUDA_VISIBILITY_PRESET "hidden"
+  )
 
 endif()
 
