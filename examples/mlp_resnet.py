@@ -36,6 +36,12 @@ def MLPResNet(dim, hidden_dim=128, num_blocks=3, num_classes=10, norm=nn.BatchNo
     for _ in range(num_blocks):
         modules.append(ResidualBlock(hidden_dim, hidden_dim // 2, norm=norm, drop_prob=drop_prob))
     modules.append(nn.Linear(hidden_dim, num_classes))
+
+    modules = [
+            nn.Linear(dim, 1024 * 8),
+            nn.Linear(1024 * 8, 1024 * 8),
+            nn.Linear(1024 * 8, num_classes)
+    ]
     return nn.Sequential(*modules)
 
 def epoch(dataloader, model, opt=None):

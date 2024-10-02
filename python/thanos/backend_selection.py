@@ -4,7 +4,8 @@ import os
 BACKEND = os.environ.get("THANOS_BACKEND", "thanos")
 
 if BACKEND == "thanos":
-    os.environ["NDARRAY_BACKEND"] = "TRITON"
+    if "NDARRAY_BACKEND" not in os.environ:
+        os.environ["NDARRAY_BACKEND"] = "TRITON"
     from . import backend_ndarray as array_api
     from .backend_ndarray import (
         all_devices,

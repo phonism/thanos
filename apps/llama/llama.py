@@ -46,12 +46,9 @@ class TransformerBlock(nn.Module):
     def __init__(self, n_embed, n_head):
         super(TransformerBlock, self).__init__()
         head_size = n_embed // n_head
-        self.sa = nn.MultiheadAttention(n_embed, n_head)
+        self.sa = nn.FusedMultiheadAttention(n_embed, n_head)
         self.ffwd = FeedFowardSwiGLU(n_embed, 4 * n_embed)
-        #self.ffwd = FeedFoward(n_embed, 4 * n_embed)
-        #self.ln1 = nn.LayerNorm(n_embed)
         self.ln1 = nn.RMSNorm(n_embed)
-        #self.ln2 = nn.LayerNorm(n_embed)
         self.ln2 = nn.RMSNorm(n_embed)
 
     def forward(self, x):
@@ -65,7 +62,7 @@ class Transformer(nn.Module):
     """
     transformer
     """
-    def __init__(self, vocab_size, n_embed=64, block_size=32, n_layer=4, n_head=4):
+    def __init__(self, vocab_size, n_embed=64, block_size=32, n_layer=24, n_head=14):
         super().__init__()
         self.vocab_size = vocab_size
         self.n_embed = n_embed
@@ -78,7 +75,9 @@ class Transformer(nn.Module):
         #self.rotary_emb = nn.RotaryEmbedding(n_embed, block_size)
         self.blocks = nn.Sequential(*[TransformerBlock(n_embed, n_head=n_head) for _ in range(n_layer)])
         #self.ln_f = nn.LayerNorm(n_embed) # final layer norm
-        self.ln_f = nn.RMSNorm(n_embed) # final layer norm
+        #self.ln_f = nn.FusedLayerNorm(n_embed) # final layer norm
+        #self.ln_f = nn.RMSNorm(n_embed) # final layer norm
+        self.ln_f = nn.FusedRMSNorm(n_embed) # final layer norm
         self.lm_head = nn.Linear(n_embed, vocab_size)
 
     def forward(self, idx, targets=None):
@@ -131,7 +130,7 @@ def get_batch(split):
     y = F.stack([data[i+1:i+block_size+1] for i in ix])
     return x, y
 
-model = Transformer(vocab_size=vocab_size, n_embed=512)
+model = Transformer(vocab_size=vocab_size, n_embed=896)
 model.cuda()
 optimizer = thanos.optim.AdamW(model.parameters(), lr=0.001)
 
@@ -141,14 +140,14 @@ start_time = time.time()
 total_loss = 0
 total_cnt = 0
 
-for iter in range(100):
+for iter in range(1000):
     xb, yb = get_batch('train')
 
     # evaluate the loss
     logits, loss = model(xb, yb)
     total_loss += loss.detach().numpy()
     total_cnt += 1
-    if iter % 100 == 0:
+    if iter % 2 == 0:
         print("step:", iter, " loss:", total_loss / total_cnt, " time:", time.time() - start_time)
         total_loss = 0
         total_cnt = 0

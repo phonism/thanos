@@ -214,8 +214,8 @@ class LayerNorm(Module):
         super().__init__()
         self.dim = dim
         self.eps = eps
-        self.gamma = Parameter(init.ones(dim, device=device, dtype=dtype))
-        self.beta = Parameter(init.zeros(dim, device=device, dtype=dtype))
+        self.weight = Parameter(init.ones(dim, device=device, dtype=dtype))
+        self.bias = Parameter(init.zeros(dim, device=device, dtype=dtype))
 
     def forward(self, x):
         if x.shape[-1] != self.dim:
@@ -224,11 +224,22 @@ class LayerNorm(Module):
         mean = F.broadcast_to(F.reshape(mean, mean.shape + (1,)), x.shape)
         var = F.summation((x - mean) ** 2, axis=-1) / self.dim
         var = F.broadcast_to(F.reshape(var, var.shape + (1,)), x.shape)
-        gamma = F.broadcast_to(F.reshape(self.gamma, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
-        beta = F.broadcast_to(F.reshape(self.beta, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
+        weight = F.broadcast_to(F.reshape(self.weight, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
+        bias = F.broadcast_to(F.reshape(self.bias, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
         output = (x - mean) / F.sqrt(var + self.eps)
-        output = gamma * output + beta 
+        output = weight * output + bias
         return output
+
+class FusedLayerNorm(Module):
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.dim = dim
+        self.weight = Parameter(init.ones(dim))
+        self.bias = Parameter(init.zeros(dim))
+
+    def forward(self, x):
+        return F.fused_layer_norm(x, self.weight, self.bias, self.eps)
 
 class RMSNorm(Module):
     def __init__(self, dim: int, eps: float = 1e-6):
@@ -244,6 +255,17 @@ class RMSNorm(Module):
         rms = x / F.sqrt(x_mean + self.eps)
         weight = F.broadcast_to(F.reshape(self.weight, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
         return rms * weight
+
+class FusedRMSNorm(Module):
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.dim = dim
+        self.weight = Parameter(init.ones(dim))
+
+    def forward(self, x):
+        return F.fused_rms_norm(x, self.weight, self.eps)
+
 
 class SoftmaxLoss(Module):
     def forward(self, logits: Tensor, y: Tensor) -> Tensor:
@@ -321,5 +343,25 @@ class MultiheadAttention(Module):
         k, q, v = [F.reshape(a, (x.shape[0], x.shape[1], self.heads, self.dim // self.heads)).transpose((1, 2)) for a in [k, q, v]]
         mask = thanos.triu((-float("inf") * init.ones(x.shape[1], x.shape[1], device=x.device)), k=1)
         mask = F.broadcast_to(F.reshape(mask, (1, 1,) + mask.shape), (k.shape[0], k.shape[1],) + mask.shape)
+        self.q = q
+        self.k = k
+        self.v = v
         atten = self.softmax(k @ F.transpose(q) / np.sqrt(self.dim // self.heads) + mask)
         return F.reshape((atten @ v).transpose((1, 2)), (x.shape[0], x.shape[1], self.dim)) @ self.w_out, atten
+
+class FusedMultiheadAttention(Module):
+    def __init__(self, dim=64, heads=1, device=None, dtype="float32"):
+        self.dim = dim
+        self.heads = heads
+        self.w_kqv = Parameter(
+                init.kaiming_uniform(self.dim, self.dim * 3),
+                device=device, dtype=dtype)
+        self.w_out = Parameter(
+                init.kaiming_uniform(self.dim, self.dim),
+                device=device, dtype=dtype)
+        self.softmax = Softmax()
+
+    def forward(self, x: Tensor) -> Tensor:
+        k, q, v = F.split(F.reshape(x @ self.w_kqv, (x.shape[0], x.shape[1], 3, self.dim)), axis=2)
+        k, q, v = [F.reshape(a, (x.shape[0], x.shape[1], self.heads, self.dim // self.heads)).transpose((1, 2)) for a in [k, q, v]]
+        return F.reshape(F.fused_attention(q, k, v).transpose((1, 2)), (x.shape[0], x.shape[1], self.dim)) @ self.w_out, None
