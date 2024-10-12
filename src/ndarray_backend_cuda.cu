@@ -505,7 +505,7 @@ __global__ void MatmulTileKernel(
 
         // Synchronize to make sure the sub-matrices are loaded  
         // before starting the computation 
-        __syncthreads();
+        //__syncthreads();
 
         // Multiply Asub and Bsub together 
         for (int k = 0; k < TILE; ++k) {

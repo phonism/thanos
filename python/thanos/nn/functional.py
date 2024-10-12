@@ -11,6 +11,13 @@ from thanos import init
 #import numpy as array_api
 from ..backend_selection import array_api, NDArray
 
+# import fused ops
+from .layer_norm import (
+        FusedLayerNormFunction, fused_layer_norm,
+        FusedRMSNormFunction, fused_rms_norm
+)
+from .attention import FusedAttention, fused_attention
+
 class MakeTensorTuple(TensorTupleOp):
     def compute(self, *args) -> tuple:
         return tuple(args)
@@ -18,7 +25,6 @@ class MakeTensorTuple(TensorTupleOp):
     def gradient(self, out_grad, node):
         assert isinstance(out_grad, TensorTuple)
         return tuple([out_grad[i] for i in range(len(out_grad))])
-
 
 def make_tuple(*args):
     return MakeTensorTuple()(*args)

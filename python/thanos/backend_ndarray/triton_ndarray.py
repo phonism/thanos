@@ -1,8 +1,8 @@
 import torch
-torch.set_printoptions(precision=8)
-
+import thanos
 import numpy as np
 import time
+import os
 
 import triton
 import triton.language as tl
@@ -13,6 +13,9 @@ import operator
 from functools import reduce
 
 def prod(x):
+    """
+    prod
+    """
     return reduce(operator.mul, x, 1)
 
 def get_cuda_autotune_config():
@@ -52,10 +55,230 @@ def get_cuda_autotune_config():
                       num_warps=4)
     ]
 
-
-
 def get_autotune_config():
     return get_cuda_autotune_config()
+
+@triton.jit
+def add_kernel(x_ptr, y_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
+    pid = tl.program_id(axis=0)
+    block_start = pid * BLOCK_SIZE
+    offsets = block_start + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < n_elements
+    x = tl.load(x_ptr + offsets, mask=mask)
+    y = tl.load(y_ptr + offsets, mask=mask)
+    output = x + y
+    tl.store(output_ptr + offsets, output, mask=mask)
+
+@triton.jit
+def add_scalar_kernel(x_ptr, scalar, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
+    pid = tl.program_id(axis=0)
+    offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < n_elements
+    x = tl.load(x_ptr + offsets, mask=mask)
+    output = x + scalar
+    tl.store(output_ptr + offsets, output, mask=mask)
+
+@triton.jit
+def mul_scalar_kernel(x_ptr, scalar, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
+    pid = tl.program_id(axis=0)
+    block_start = pid * BLOCK_SIZE
+    offsets = block_start + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < n_elements
+    x = tl.load(x_ptr + offsets, mask=mask)
+    output = x * scalar
+    tl.store(output_ptr + offsets, output, mask=mask)
+
+@triton.jit
+def mul_kernel(x_ptr, y_ptr, output_ptr, N, BLOCK_SIZE: tl.constexpr):
+    pid = tl.program_id(axis=0)
+    offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < N
+    x = tl.load(x_ptr + offsets, mask=mask)
+    y = tl.load(y_ptr + offsets, mask=mask)
+    output = x * y
+    tl.store(output_ptr + offsets, output, mask=mask)
+
+@triton.jit
+def div_scalar_kernel(x_ptr, scalar, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
+    pid = tl.program_id(axis=0)
+    block_start = pid * BLOCK_SIZE
+    offsets = block_start + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < n_elements
+    x = tl.load(x_ptr + offsets, mask=mask)
+    output = x / scalar
+    tl.store(output_ptr + offsets, output, mask=mask)
+
+@triton.jit
+def div_kernel(x_ptr, y_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
+    pid = tl.program_id(axis=0)
+    block_start = pid * BLOCK_SIZE
+    offsets = block_start + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < n_elements
+    x = tl.load(x_ptr + offsets, mask=mask)
+    y = tl.load(y_ptr + offsets, mask=mask)
+    output = x / y
+    tl.store(output_ptr + offsets, output, mask=mask)
+
+@triton.jit
+def maximum_scalar_kernel(x_ptr, scalar, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
+    pid = tl.program_id(axis=0)
+    block_start = pid * BLOCK_SIZE
+    offsets = block_start + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < n_elements
+    x = tl.load(x_ptr + offsets, mask=mask)
+    output = tl.maximum(x, scalar)
+    tl.store(output_ptr + offsets, output, mask=mask)
+
+@triton.jit
+def maximum_kernel(x_ptr, y_ptr, output_ptr, N, BLOCK_SIZE: tl.constexpr):
+    pid = tl.program_id(axis=0)
+    offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < N
+    x = tl.load(x_ptr + offsets, mask=mask)
+    y = tl.load(y_ptr + offsets, mask=mask)
+    output = tl.maximum(x, y)
+    tl.store(output_ptr + offsets, output, mask=mask)
+
+@triton.jit
+def log_kernel(x_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
+    pid = tl.program_id(axis=0)
+    block_start = pid * BLOCK_SIZE
+    offsets = block_start + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < n_elements
+    x = tl.load(x_ptr + offsets, mask=mask)
+    output = tl.log(x)
+    tl.store(output_ptr + offsets, output, mask=mask)
+
+@triton.jit
+def exp_kernel(x_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
+    pid = tl.program_id(axis=0)
+    block_start = pid * BLOCK_SIZE
+    offsets = block_start + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < n_elements
+    x = tl.load(x_ptr + offsets, mask=mask)
+    output = tl.exp(x)
+    tl.store(output_ptr + offsets, output, mask=mask)
+
+@triton.jit
+def cos_kernel(x_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
+    pid = tl.program_id(axis=0)
+    block_start = pid * BLOCK_SIZE
+    offsets = block_start + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < n_elements
+    x = tl.load(x_ptr + offsets, mask=mask)
+    output = tl.cos(x)
+    tl.store(output_ptr + offsets, output, mask=mask)
+
+@triton.jit
+def sin_kernel(x_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
+    pid = tl.program_id(axis=0)
+    block_start = pid * BLOCK_SIZE
+    offsets = block_start + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < n_elements
+    x = tl.load(x_ptr + offsets, mask=mask)
+    output = tl.sin(x)
+    tl.store(output_ptr + offsets, output, mask=mask)
+
+@triton.jit
+def sqrt_kernel(x_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
+    pid = tl.program_id(axis=0)
+    block_start = pid * BLOCK_SIZE
+    offsets = block_start + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < n_elements
+    x = tl.load(x_ptr + offsets, mask=mask)
+    output = tl.sqrt(x)
+    tl.store(output_ptr + offsets, output, mask=mask)
+
+#@triton.autotune(
+        #configs=get_autotune_config(),
+        #key=['M', 'N', 'K'],
+#)
+@triton.jit
+def matmul_kernel(
+        a_ptr, b_ptr, c_ptr,
+        M, N, K,
+        stride_am, stride_ak,
+        stride_bk, stride_bn,
+        stride_cm, stride_cn,
+        # Meta-parameters
+        BLOCK_SIZE_M: tl.constexpr, BLOCK_SIZE_N: tl.constexpr, BLOCK_SIZE_K: tl.constexpr,
+        GROUP_SIZE_M: tl.constexpr,
+        ACTIVATION: tl.constexpr):
+    pid = tl.program_id(axis=0)
+    num_pid_m = tl.cdiv(M, BLOCK_SIZE_M)
+    num_pid_n = tl.cdiv(N, BLOCK_SIZE_N)
+    num_pid_in_group = GROUP_SIZE_M * num_pid_n
+    group_id = pid // num_pid_in_group
+    first_pid_m = group_id * GROUP_SIZE_M
+    group_size_m = min(num_pid_m - first_pid_m, GROUP_SIZE_M)
+    pid_m = first_pid_m + ((pid % num_pid_in_group) % group_size_m)
+    pid_n = (pid % num_pid_in_group) // group_size_m
+    offs_am = (pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)) % M
+    offs_bn = (pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)) % N
+    offs_k = tl.arange(0, BLOCK_SIZE_K)
+    a_ptrs = a_ptr + (offs_am[:, None] * stride_am + offs_k[None, :] * stride_ak)
+    b_ptrs = b_ptr + (offs_k[:, None] * stride_bk + offs_bn[None, :] * stride_bn)
+    accumulator = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
+    for k in range(0, tl.cdiv(K, BLOCK_SIZE_K)):
+        a = tl.load(a_ptrs, mask=offs_k[None, :] < K - k * BLOCK_SIZE_K, other=0.0)
+        b = tl.load(b_ptrs, mask=offs_k[:, None] < K - k * BLOCK_SIZE_K, other=0.0)
+        accumulator = tl.dot(a, b, accumulator,  allow_tf32=False)
+        a_ptrs += BLOCK_SIZE_K * stride_ak
+        b_ptrs += BLOCK_SIZE_K * stride_bk
+    c = accumulator
+    offs_cm = pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)
+    offs_cn = pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)
+    c_ptrs = c_ptr + stride_cm * offs_cm[:, None] + stride_cn * offs_cn[None, :]
+    c_mask = (offs_cm[:, None] < M) & (offs_cn[None, :] < N)
+    tl.store(c_ptrs, c, mask=c_mask)
+
+@triton.jit
+def sum_kernel(x_ptr, output_ptr, M, N, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr):
+    """
+    pid_m = tl.program_id(axis=0)
+    m_offset = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    n_offset = tl.arange(0, BLOCK_N)
+    offset = m_offset[:, None] * N + n_offset[None, :]
+    m_mask = m_offset < M
+    n_mask = n_offset < N
+    mask = m_mask[:, None] & n_mask[None, :]
+    inp = tl.load(x_ptr + offset, mask=mask, other=0)
+    out = tl.sum(inp, axis=1)
+    tl.store(output_ptr + m_offset, out, mask=m_mask)
+    """
+    pid_m = tl.program_id(axis=0)
+    m_offset = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    m_mask = m_offset < M  # 计算行掩码
+    out = tl.zeros((BLOCK_M,), dtype=tl.float32) 
+    # 分块处理列数据
+    for start in range(0, N, BLOCK_N):
+        n_offset = start + tl.arange(0, BLOCK_N)
+        offset = m_offset[:, None] * N + n_offset[None, :]
+        n_mask = n_offset < N  # 计算列掩码
+        mask = m_mask[:, None] & n_mask[None, :]  # 组合掩码
+        inp = tl.load(x_ptr + offset, mask=mask, other=0)
+        out += tl.sum(inp, axis=1)
+
+    tl.store(output_ptr + m_offset, out, mask=m_mask)
+
+@triton.jit
+def max_kernel(x_ptr, output_ptr, M, N, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr):
+    pid_m = tl.program_id(axis=0)
+    m_offset = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    m_mask = m_offset < M  # 行掩码
+    
+    # 初始化输出为最小的可能值
+    out = tl.full((BLOCK_M,), -float('inf'), dtype=tl.float32)
+
+    for start in range(0, N, BLOCK_N):
+        n_offset = start + tl.arange(0, BLOCK_N)
+        offset = m_offset[:, None] * N + n_offset[None, :]
+        n_mask = n_offset < N  # 列掩码
+        mask = m_mask[:, None] & n_mask[None, :]  # 组合掩码
+        inp = tl.load(x_ptr + offset, mask=mask, other=-float('inf'))
+        out = tl.maximum(out, tl.max(inp, axis=1))
+                                                                                        
+    tl.store(output_ptr + m_offset, out, mask=m_mask)
 
 class NDArray:
     def __init__(self, data, device=None, dtype=None):
@@ -66,8 +289,11 @@ class NDArray:
         elif isinstance(data, NDArray):
             self.data = data.data
             self._device = data.device
-        else:
+        elif isinstance(data, torch.Tensor):
             self.data = data
+            self._device = device
+        else:
+            self.data = torch.from_numpy(np.array(data))
             self._device = device
 
     @staticmethod
@@ -122,49 +348,8 @@ class NDArray:
 
     @property
     def flat(self):
-        return NDArray(self.data.reshape((self.size,)))
-
-    def __addd__(self, y):
-        if isinstance(y, NDArray):
-            return NDArray(self.data + y.data)
-        return NDArray(self.data + y)
-
-    """
-
-    def __mul__(self, y):
-        if isinstance(y, NDArray):
-            return NDArray(self.data * y.data)
-        return NDArray(self.data * y)
-
-    __rmul__ = __mul__
-
-    def __truediv__(self, y):
-        if isinstance(y, NDArray):
-            return NDArray(self.data / y.data)
-        return NDArray(self.data / y)
-    """
-
-    @staticmethod
-    @triton.jit
-    def add_kernel(x_ptr, y_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
-        pid = tl.program_id(axis=0)
-        block_start = pid * BLOCK_SIZE
-        offsets = block_start + tl.arange(0, BLOCK_SIZE)
-        mask = offsets < n_elements
-        x = tl.load(x_ptr + offsets, mask=mask)
-        y = tl.load(y_ptr + offsets, mask=mask)
-        output = x + y
-        tl.store(output_ptr + offsets, output, mask=mask)
-
-    @staticmethod
-    @triton.jit
-    def add_scalar_kernel(x_ptr, scalar, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
-        pid = tl.program_id(axis=0)
-        offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
-        mask = offsets < n_elements
-        x = tl.load(x_ptr + offsets, mask=mask)
-        output = x + scalar
-        tl.store(output_ptr + offsets, output, mask=mask)
+        out_tensor = NDArray(self.data.reshape((self.size,)))
+        return out_tensor
 
     def __add__(self, y):
         output = torch.empty_like(self.data, device=torch.device("cuda"), dtype=self.dtype)
@@ -176,37 +361,15 @@ class NDArray:
         if isinstance(y, NDArray):
             if y.data.is_contiguous() is False:
                 y.data = y.data.contiguous()
-            NDArray.add_kernel[grid](self.data, y.data, output.data, n_elements, BLOCK_SIZE=1024)
+            add_kernel[grid](self.data, y.data, output.data, n_elements, BLOCK_SIZE=1024)
         else:
-            NDArray.add_scalar_kernel[grid](self.data, y, output.data, n_elements, BLOCK_SIZE=1024)
+            add_scalar_kernel[grid](self.data, y, output.data, n_elements, BLOCK_SIZE=1024)
         return NDArray(output)
 
     __radd__ = __add__
 
-    @staticmethod
-    @triton.jit
-    def mul_scalar_kernel(x_ptr, scalar, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
-        pid = tl.program_id(axis=0)
-        block_start = pid * BLOCK_SIZE
-        offsets = block_start + tl.arange(0, BLOCK_SIZE)
-        mask = offsets < n_elements
-        x = tl.load(x_ptr + offsets, mask=mask)
-        output = x * scalar
-        tl.store(output_ptr + offsets, output, mask=mask)
-
-    @staticmethod
-    @triton.jit
-    def mul_kernel(x_ptr, y_ptr, output_ptr, N, BLOCK_SIZE: tl.constexpr):
-        pid = tl.program_id(axis=0)
-        offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
-        mask = offsets < N
-        x = tl.load(x_ptr + offsets, mask=mask)
-        y = tl.load(y_ptr + offsets, mask=mask)
-        output = x * y
-        tl.store(output_ptr + offsets, output, mask=mask)
-
     def __mul__(self, y):
-        output = torch.zeros(self.shape, device=torch.device("cuda"), dtype=self.dtype)
+        output = torch.empty_like(self.data, device=torch.device("cuda"), dtype=self.dtype)
         assert self.data.is_cuda and output.is_cuda
         if self.data.is_contiguous() is False:
             self.data = self.data.contiguous()
@@ -215,35 +378,12 @@ class NDArray:
         if isinstance(y, NDArray):
             if y.data.is_contiguous() is False:
                 y.data = y.data.contiguous()
-            NDArray.mul_kernel[grid](self.data, y.data, output, n_elements, BLOCK_SIZE=1024)
+            mul_kernel[grid](self.data, y.data, output, n_elements, BLOCK_SIZE=1024)
         else:
-            NDArray.mul_scalar_kernel[grid](self.data, y, output, n_elements, BLOCK_SIZE=1024)
+            mul_scalar_kernel[grid](self.data, y, output, n_elements, BLOCK_SIZE=1024)
         return NDArray(output)
 
     __rmul__ = __mul__
-
-    @staticmethod
-    @triton.jit
-    def div_scalar_kernel(x_ptr, scalar, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
-        pid = tl.program_id(axis=0)
-        block_start = pid * BLOCK_SIZE
-        offsets = block_start + tl.arange(0, BLOCK_SIZE)
-        mask = offsets < n_elements
-        x = tl.load(x_ptr + offsets, mask=mask)
-        output = x / scalar
-        tl.store(output_ptr + offsets, output, mask=mask)
-
-    @staticmethod
-    @triton.jit
-    def div_kernel(x_ptr, y_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
-        pid = tl.program_id(axis=0)
-        block_start = pid * BLOCK_SIZE
-        offsets = block_start + tl.arange(0, BLOCK_SIZE)
-        mask = offsets < n_elements
-        x = tl.load(x_ptr + offsets, mask=mask)
-        y = tl.load(y_ptr + offsets, mask=mask)
-        output = x / y
-        tl.store(output_ptr + offsets, output, mask=mask)
 
     def __truediv__(self, y):
         output = torch.empty_like(self.data, dtype=self.dtype)
@@ -256,32 +396,10 @@ class NDArray:
         if isinstance(y, NDArray):
             if y.data.is_contiguous() is False:
                 y.data = y.data.contiguous()
-            NDArray.div_kernel[grid](self.data, y.data, output, n_elements, BLOCK_SIZE=1024)
+            div_kernel[grid](self.data, y.data, output, n_elements, BLOCK_SIZE=1024)
         else:
-            NDArray.div_scalar_kernel[grid](self.data, y, output, n_elements, BLOCK_SIZE=1024)
+            div_scalar_kernel[grid](self.data, y, output, n_elements, BLOCK_SIZE=1024)
         return NDArray(output)
-
-    @staticmethod
-    @triton.jit
-    def maximum_scalar_kernel(x_ptr, scalar, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
-        pid = tl.program_id(axis=0)
-        block_start = pid * BLOCK_SIZE
-        offsets = block_start + tl.arange(0, BLOCK_SIZE)
-        mask = offsets < n_elements
-        x = tl.load(x_ptr + offsets, mask=mask)
-        output = tl.maximum(x, scalar)
-        tl.store(output_ptr + offsets, output, mask=mask)
-
-    @staticmethod
-    @triton.jit
-    def maximum_kernel(x_ptr, y_ptr, output_ptr, N, BLOCK_SIZE: tl.constexpr):
-        pid = tl.program_id(axis=0)
-        offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
-        mask = offsets < N
-        x = tl.load(x_ptr + offsets, mask=mask)
-        y = tl.load(y_ptr + offsets, mask=mask)
-        output = tl.maximum(x, y)
-        tl.store(output_ptr + offsets, output, mask=mask)
 
     def maximum(self, y):
         output = torch.zeros(self.shape, device=torch.device("cuda"), dtype=self.dtype)
@@ -293,13 +411,11 @@ class NDArray:
         if isinstance(y, NDArray):
             if y.data.is_contiguous() is False:
                 y.data = y.data.contiguous()
-            NDArray.maximum_kernel[grid](self.data, y.data, output, n_elements, BLOCK_SIZE=1024)
+            maximum_kernel[grid](self.data, y.data, output, n_elements, BLOCK_SIZE=1024)
         else:
-            NDArray.maximum_scalar_kernel[grid](self.data, y, output, n_elements, BLOCK_SIZE=1024)
+            maximum_scalar_kernel[grid](self.data, y, output, n_elements, BLOCK_SIZE=1024)
         return NDArray(output)
     
-
-
     def __neg__(self):
         if self.data.is_contiguous() is False:
             self.data = self.data.contiguous()
@@ -320,7 +436,6 @@ class NDArray:
                 other.data = other.data.contiguous()
         return other + (-self)
 
-
     def __pow__(self, scalar):
         output = torch.empty_like(self.data, dtype=self.dtype)
         assert self.data.is_cuda and output.is_cuda
@@ -328,17 +443,6 @@ class NDArray:
         if self.data.is_contiguous() is False:
             self.data = self.data.contiguous()
         return NDArray(self.data ** scalar)
-
-    @staticmethod
-    @triton.jit
-    def log_kernel(x_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
-        pid = tl.program_id(axis=0)
-        block_start = pid * BLOCK_SIZE
-        offsets = block_start + tl.arange(0, BLOCK_SIZE)
-        mask = offsets < n_elements
-        x = tl.load(x_ptr + offsets, mask=mask)
-        output = tl.log(x)
-        tl.store(output_ptr + offsets, output, mask=mask)
 
     def log(self):
         output = torch.empty_like(self.data, dtype=self.dtype)
@@ -348,19 +452,8 @@ class NDArray:
             self.data = self.data.contiguous()
         n_elements = output.numel()
         grid = lambda meta: (triton.cdiv(n_elements, meta["BLOCK_SIZE"]), )
-        NDArray.log_kernel[grid](self.data, output, n_elements, BLOCK_SIZE=1024)
+        log_kernel[grid](self.data, output, n_elements, BLOCK_SIZE=1024)
         return NDArray(output)
-
-    @staticmethod
-    @triton.jit
-    def exp_kernel(x_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
-        pid = tl.program_id(axis=0)
-        block_start = pid * BLOCK_SIZE
-        offsets = block_start + tl.arange(0, BLOCK_SIZE)
-        mask = offsets < n_elements
-        x = tl.load(x_ptr + offsets, mask=mask)
-        output = tl.exp(x)
-        tl.store(output_ptr + offsets, output, mask=mask)
 
     def exp(self):
         output = torch.empty_like(self.data, dtype=self.dtype)
@@ -369,19 +462,8 @@ class NDArray:
             self.data = self.data.contiguous()
         n_elements = output.numel()
         grid = lambda meta: (triton.cdiv(n_elements, meta["BLOCK_SIZE"]), )
-        NDArray.exp_kernel[grid](self.data, output, n_elements, BLOCK_SIZE=1024)
+        exp_kernel[grid](self.data, output, n_elements, BLOCK_SIZE=1024)
         return NDArray(output)
-
-    @staticmethod
-    @triton.jit
-    def cos_kernel(x_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
-        pid = tl.program_id(axis=0)
-        block_start = pid * BLOCK_SIZE
-        offsets = block_start + tl.arange(0, BLOCK_SIZE)
-        mask = offsets < n_elements
-        x = tl.load(x_ptr + offsets, mask=mask)
-        output = tl.cos(x)
-        tl.store(output_ptr + offsets, output, mask=mask)
 
     def cos(self):
         output = torch.empty_like(self.data, dtype=self.dtype)
@@ -390,19 +472,8 @@ class NDArray:
             self.data = self.data.contiguous()
         n_elements = output.numel()
         grid = lambda meta: (triton.cdiv(n_elements, meta["BLOCK_SIZE"]), )
-        NDArray.cos_kernel[grid](self.data, output, n_elements, BLOCK_SIZE=1024)
+        cos_kernel[grid](self.data, output, n_elements, BLOCK_SIZE=1024)
         return NDArray(output)
-
-    @staticmethod
-    @triton.jit
-    def sin_kernel(x_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
-        pid = tl.program_id(axis=0)
-        block_start = pid * BLOCK_SIZE
-        offsets = block_start + tl.arange(0, BLOCK_SIZE)
-        mask = offsets < n_elements
-        x = tl.load(x_ptr + offsets, mask=mask)
-        output = tl.sin(x)
-        tl.store(output_ptr + offsets, output, mask=mask)
 
     def sin(self):
         output = torch.empty_like(self.data, dtype=self.dtype)
@@ -411,19 +482,8 @@ class NDArray:
             self.data = self.data.contiguous()
         n_elements = output.numel()
         grid = lambda meta: (triton.cdiv(n_elements, meta["BLOCK_SIZE"]), )
-        NDArray.sin_kernel[grid](self.data, output, n_elements, BLOCK_SIZE=1024)
+        sin_kernel[grid](self.data, output, n_elements, BLOCK_SIZE=1024)
         return NDArray(output)
-
-    @staticmethod
-    @triton.jit
-    def sqrt_kernel(x_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
-        pid = tl.program_id(axis=0)
-        block_start = pid * BLOCK_SIZE
-        offsets = block_start + tl.arange(0, BLOCK_SIZE)
-        mask = offsets < n_elements
-        x = tl.load(x_ptr + offsets, mask=mask)
-        output = tl.sqrt(x)
-        tl.store(output_ptr + offsets, output, mask=mask)
 
     def sqrt(self):
         output = torch.empty_like(self.data, dtype=self.dtype)
@@ -432,7 +492,7 @@ class NDArray:
             self.data = self.data.contiguous()
         n_elements = output.numel()
         grid = lambda meta: (triton.cdiv(n_elements, meta["BLOCK_SIZE"]), )
-        NDArray.sqrt_kernel[grid](self.data, output, n_elements, BLOCK_SIZE=1024)
+        sqrt_kernel[grid](self.data, output, n_elements, BLOCK_SIZE=1024)
         return NDArray(output)
 
     def reshape(self, new_shape):
@@ -445,12 +505,16 @@ class NDArray:
         if self.data.is_contiguous() is False:
             self.data = self.data.contiguous()
         out_tensor = NDArray(self.data.permute(new_axis))
+        if out_tensor.data.is_contiguous():
+            out_tensor.data = out_tensor.data.contiguous()
         return out_tensor
 
     def broadcast_to(self, new_shape):
         if self.data.is_contiguous() is False:
             self.data = self.data.contiguous()
         out_tensor = NDArray(self.data.broadcast_to(new_shape))
+        if out_tensor.data.is_contiguous():
+            out_tensor.data = out_tensor.data.contiguous()
         return out_tensor
 
     def __getitem__(self, idxs):
@@ -521,54 +585,9 @@ class NDArray:
                 other.data = other.data.contiguous()
         return 1 - (self > other)
 
-    #@triton.autotune(
-            #configs=get_autotune_config(),
-            #key=['M', 'N', 'K'],
-    #)
-    @staticmethod
-    @triton.jit
-    def matmul_kernel(
-            a_ptr, b_ptr, c_ptr,
-            M, N, K,
-            stride_am, stride_ak,
-            stride_bk, stride_bn,
-            stride_cm, stride_cn,
-            # Meta-parameters
-            BLOCK_SIZE_M: tl.constexpr, BLOCK_SIZE_N: tl.constexpr, BLOCK_SIZE_K: tl.constexpr,
-            GROUP_SIZE_M: tl.constexpr,
-            ACTIVATION: tl.constexpr):
-        pid = tl.program_id(axis=0)
-        num_pid_m = tl.cdiv(M, BLOCK_SIZE_M)
-        num_pid_n = tl.cdiv(N, BLOCK_SIZE_N)
-        num_pid_in_group = GROUP_SIZE_M * num_pid_n
-        group_id = pid // num_pid_in_group
-        first_pid_m = group_id * GROUP_SIZE_M
-        group_size_m = min(num_pid_m - first_pid_m, GROUP_SIZE_M)
-        pid_m = first_pid_m + ((pid % num_pid_in_group) % group_size_m)
-        pid_n = (pid % num_pid_in_group) // group_size_m
-
-        offs_am = (pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)) % M
-        offs_bn = (pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)) % N
-        offs_k = tl.arange(0, BLOCK_SIZE_K)
-        a_ptrs = a_ptr + (offs_am[:, None] * stride_am + offs_k[None, :] * stride_ak)
-        b_ptrs = b_ptr + (offs_k[:, None] * stride_bk + offs_bn[None, :] * stride_bn)
-
-        accumulator = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
-        for k in range(0, tl.cdiv(K, BLOCK_SIZE_K)):
-            a = tl.load(a_ptrs, mask=offs_k[None, :] < K - k * BLOCK_SIZE_K, other=0.0)
-            b = tl.load(b_ptrs, mask=offs_k[:, None] < K - k * BLOCK_SIZE_K, other=0.0)
-            accumulator = tl.dot(a, b, accumulator,  allow_tf32=False)
-            a_ptrs += BLOCK_SIZE_K * stride_ak
-            b_ptrs += BLOCK_SIZE_K * stride_bk
-        c = accumulator
-
-        offs_cm = pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)
-        offs_cn = pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)
-        c_ptrs = c_ptr + stride_cm * offs_cm[:, None] + stride_cn * offs_cn[None, :]
-        c_mask = (offs_cm[:, None] < M) & (offs_cn[None, :] < N)
-        tl.store(c_ptrs, c, mask=c_mask)
 
     def __matmul__(self, b, activation=""):
+        start_time = time.time()
         # Check constraints.
         assert self.shape[-1] == b.shape[-2], "Incompatible dimensions"
         if self.data.is_contiguous() is False:
@@ -582,8 +601,7 @@ class NDArray:
             c = torch.empty((M, N), device=torch.device("cuda"), dtype=self.dtype)
             # 1D launch kernel where each block gets its own program.
             grid = lambda META: (triton.cdiv(M, META['BLOCK_SIZE_M']) * triton.cdiv(N, META['BLOCK_SIZE_N']), )
-            start_time = time.time()
-            self.matmul_kernel[grid](
+            matmul_kernel[grid](
                     self.data, b.data, c,
                     M, N, K,
                     self.stride(0), self.stride(1),
@@ -604,7 +622,7 @@ class NDArray:
             # 1D launch kernel where each block gets its own program.
             grid = lambda META: (triton.cdiv(M, META['BLOCK_SIZE_M']) * triton.cdiv(N, META['BLOCK_SIZE_N']), )
             for i in range(bz1):
-                self.matmul_kernel[grid](
+                matmul_kernel[grid](
                         self.data[i], b.data[i], c.data[i],
                         M, N, K,
                         self.stride(-2), self.stride(-1),
@@ -618,23 +636,6 @@ class NDArray:
                 )
             return NDArray(c)
 
-    @staticmethod
-    @triton.jit
-    def sum_kernel(x_ptr, output_ptr, M, N, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr):
-        pid_m = tl.program_id(axis=0)
-
-        m_offset = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
-        n_offset = tl.arange(0, BLOCK_N)
-        offset = m_offset[:, None] * N + n_offset[None, :]
-
-        m_mask = m_offset < M
-        n_mask = n_offset < N
-        mask = m_mask[:, None] & n_mask[None, :]
-
-        inp = tl.load(x_ptr + offset, mask=mask, other=0)
-        out = tl.sum(inp, axis=1)
-
-        tl.store(output_ptr + m_offset, out, mask=m_mask)
 
     def sum(self, axis=None, keepdims=False):
         shape = self.shape
@@ -671,29 +672,12 @@ class NDArray:
         output = torch.empty(output_shape, device=torch.device("cuda"), dtype=self.dtype)
 
         block_m = 4
-        block_n = triton.next_power_of_2(n)
+        block_n = min(triton.next_power_of_2(n), 1024)
         grid = (triton.cdiv(m, block_m), 1, 1)
 
-        self.sum_kernel[grid](self.data, output, m, n, block_m, block_n)
+        sum_kernel[grid](self.data, output, m, n, block_m, block_n)
         return NDArray(output)
 
-    @staticmethod
-    @triton.jit
-    def max_kernel(x_ptr, output_ptr, M, N, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr):
-        pid_m = tl.program_id(axis=0)
-
-        m_offset = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
-        n_offset = tl.arange(0, BLOCK_N)
-        offset = m_offset[:, None] * N + n_offset[None, :]
-
-        m_mask = m_offset < M
-        n_mask = n_offset < N
-        mask = m_mask[:, None] & n_mask[None, :]
-
-        inp = tl.load(x_ptr + offset, mask=mask, other=-float('inf'))
-        out = tl.max(inp, axis=1)
-
-        tl.store(output_ptr + m_offset, out, mask=m_mask)
 
     def max(self, axis=None, keepdims=False):
         shape = self.shape
@@ -730,8 +714,8 @@ class NDArray:
         output = torch.empty(output_shape, device=torch.device("cuda"), dtype=self.dtype)
 
         block_m = 4
-        block_n = triton.next_power_of_2(n)
+        block_n = min(triton.next_power_of_2(n), 1024)
         grid = (triton.cdiv(m, block_m), 1, 1)
 
-        self.max_kernel[grid](self.data, output, m, n, block_m, block_n)
+        max_kernel[grid](self.data, output, m, n, block_m, block_n)
         return NDArray(output)

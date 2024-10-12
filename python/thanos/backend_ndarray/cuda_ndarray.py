@@ -1,5 +1,6 @@
 import operator
 import math
+import time
 from functools import reduce
 import numpy as np
 from . import ndarray_backend_cuda
@@ -300,7 +301,6 @@ class NDArray:
         offset = 0
         for i, idx in enumerate(idxs):
             start, stop, step = idx.start, min(idx.stop, self.shape[i]), idx.step
-            #if math.ceil((stop - start) / step) != 1:
             new_shape.append(math.ceil((stop - start) / step))
             offset += (start * self.strides[i])
             new_strides.append(self.strides[i] * step)
@@ -451,6 +451,7 @@ class NDArray:
         The GPU (and numpy) versions don't have any tiled version (or rather,
         the GPU version will just work natively by tiling any input size).
         """
+        start_time = time.time()
         if self.ndim == 2 and other.ndim == 2 and self.shape[1] == other.shape[0]:
             m, n, p = self.shape[0], self.shape[1], other.shape[1]
             # if the matrix is aligned, use tiled matrix multiplication

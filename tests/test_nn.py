@@ -106,7 +106,7 @@ def test_onehead_attention(shape, device):
     attn = thanos.nn.MultiheadAttention(shape[2], 1)
 
     torch_attn = torch.nn.MultiheadAttention(shape[2], 1, bias=False, batch_first=True)
-    attn.w_kqv = thanos.nn.Parameter(torch_attn.in_proj_weight.detach().numpy().T)
+    attn.w_qkv = thanos.nn.Parameter(torch_attn.in_proj_weight.detach().T.numpy())
     attn.w_out = thanos.nn.Parameter(torch_attn.out_proj.weight.detach().numpy().T)
     M = torch.triu(-float("inf") * torch.ones(shape[1], shape[1]), 1)
 
@@ -140,7 +140,7 @@ def test_multihead_attention(shape, device):
     attn = thanos.nn.MultiheadAttention(dim=shape[2], heads=4)
 
     torch_attn = torch.nn.MultiheadAttention(shape[2], 4, bias=False, batch_first=True)
-    attn.w_kqv = thanos.nn.Parameter(torch_attn.in_proj_weight.detach().numpy().T)
+    attn.w_qkv = thanos.nn.Parameter(torch_attn.in_proj_weight.detach().T.numpy())
     attn.w_out = thanos.nn.Parameter(torch_attn.out_proj.weight.detach().numpy().T)
     M = torch.triu(-float("inf") * torch.ones(shape[1], shape[1]), 1)
 

@@ -1,8 +1,10 @@
 import operator
+import torch
 import os
 import math
 from functools import reduce
 import numpy as np
+import thanos
 from . import ndarray_backend_numpy
 from . import ndarray_backend_cpu
 #from .triton_ndarray import *
@@ -37,12 +39,15 @@ class BackendDevice:
     def randn(self, *shape, dtype="float32"):
         # note: numpy doesn't support types within standard random routines, and
         # .astype("float32") does work if we're generating a singleton
-        return NDArray(np.random.randn(*shape).astype(dtype), device=self)
+        return NDArray(torch.randn(*shape, device="cuda"), device=self)
+        #return NDArray(np.random.randn(*shape).astype(dtype), device=self)
 
     def rand(self, *shape, dtype="float32"):
         # note: numpy doesn't support types within standard random routines, and
         # .astype("float32") does work if we're generating a singleton
-        return NDArray(np.random.rand(*shape).astype(dtype), device=self)
+        # TODO 这里先用torch的rand
+        return NDArray(torch.rand(*shape, device="cuda"), device=self)
+        #return NDArray(np.random.rand(*shape).astype(dtype), device=self)
 
     def one_hot(self, n, i, dtype="float32"):
         return NDArray(np.eye(n, dtype=dtype)[np.array(i).astype(int)], device=self)

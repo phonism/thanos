@@ -4,15 +4,15 @@ from torch.nn import functional as F
 
 # hyperparameters
 batch_size = 16 # how many independent sequences will we process in parallel?
-block_size = 32 # what is the maximum context length for predictions?
+block_size = 256 # what is the maximum context length for predictions?
 max_iters = 10000
-eval_interval = 100
+eval_interval = 2
 learning_rate = 1e-3
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 eval_iters = 200
-n_embd = 512
-n_head = 4
-n_layer = 4
+n_embd = 64 * 16
+n_head = 16
+n_layer = 24
 dropout = 0.0
 # ------------
 
@@ -193,7 +193,7 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 import time
 start_time = time.time()
 
-max_iters = 100
+max_iters = 1000
 for iter in range(max_iters):
     # sample a batch of data
     xb, yb = get_batch('train')

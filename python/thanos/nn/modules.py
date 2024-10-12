@@ -91,6 +91,53 @@ class Module:
     def _children(self) -> List["Module"]:
         return _child_modules(self.__dict__)
 
+    def state_dict(self, prefix=""):
+        state_dict = {}
+        for name, param in self.__dict__.items():
+            if isinstance(param, thanos.Tensor):
+                state_dict[prefix + name] = param
+            elif isinstance(param, Module):
+                state_dict.update(param.state_dict(prefix + name + '.'))
+            elif isinstance(param, (list, tuple)):
+                for idx, v in enumerate(param):
+                    state_dict.update(v.state_dict(prefix + name + '.' + str(idx) + "."))
+        return state_dict
+
+    def load_state_dict(self, state_dict, strict=True):
+        missing_keys = []
+        unexpected_keys = list(state_dict.keys())
+
+        def load(module, prefix=''):
+            for name, param in module.__dict__.items():
+                full_name = prefix + name
+
+                # 如果是一个 Tensor，则直接从 state_dict 中加载
+                if isinstance(param, thanos.Tensor):
+                    if full_name in state_dict:
+                        param.copy_(state_dict[full_name])
+                        unexpected_keys.remove(full_name)
+                    elif strict:
+                        missing_keys.append(full_name)
+
+                # 如果是一个子模块，则递归调用
+                elif isinstance(param, Module):
+                    load(param, full_name + '.')
+
+                # 如果是列表或元组，递归地加载它们的元素
+                elif isinstance(param, (list, tuple)):
+                    for idx, sub_param in enumerate(param):
+                        if isinstance(sub_param, Module):
+                            load(sub_param, full_name + '.' + str(idx) + '.')
+
+        load(self)
+
+        if strict:
+            if len(missing_keys) > 0:
+                raise KeyError(f"Missing keys in state_dict: {missing_keys}")
+            if len(unexpected_keys) > 0:
+                raise KeyError(f"Unexpected keys in state_dict: {unexpected_keys}")
+
+
     def train(self):
         self.training = True
         for m in self._children():
@@ -214,8 +261,8 @@ class LayerNorm(Module):
         super().__init__()
         self.dim = dim
         self.eps = eps
-        self.gamma = Parameter(init.ones(dim, device=device, dtype=dtype))
-        self.beta = Parameter(init.zeros(dim, device=device, dtype=dtype))
+        self.weight = Parameter(init.ones(dim, device=device, dtype=dtype))
+        self.bias = Parameter(init.zeros(dim, device=device, dtype=dtype))
 
     def forward(self, x):
         if x.shape[-1] != self.dim:
@@ -224,11 +271,22 @@ class LayerNorm(Module):
         mean = F.broadcast_to(F.reshape(mean, mean.shape + (1,)), x.shape)
         var = F.summation((x - mean) ** 2, axis=-1) / self.dim
         var = F.broadcast_to(F.reshape(var, var.shape + (1,)), x.shape)
-        gamma = F.broadcast_to(F.reshape(self.gamma, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
-        beta = F.broadcast_to(F.reshape(self.beta, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
+        weight = F.broadcast_to(F.reshape(self.weight, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
+        bias = F.broadcast_to(F.reshape(self.bias, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
         output = (x - mean) / F.sqrt(var + self.eps)
-        output = gamma * output + beta 
+        output = weight * output + bias
         return output
+
+class FusedLayerNorm(Module):
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.dim = dim
+        self.weight = Parameter(init.ones(dim))
+        self.bias = Parameter(init.zeros(dim))
+
+    def forward(self, x):
+        return F.fused_layer_norm(x, self.weight, self.bias, self.eps)
 
 class RMSNorm(Module):
     def __init__(self, dim: int, eps: float = 1e-6):
@@ -244,6 +302,16 @@ class RMSNorm(Module):
         rms = x / F.sqrt(x_mean + self.eps)
         weight = F.broadcast_to(F.reshape(self.weight, (1, ) * (len(x.shape) - 1) + (self.dim,)), x.shape)
         return rms * weight
+
+class FusedRMSNorm(Module):
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.dim = dim
+        self.weight = Parameter(init.ones(dim))
+
+    def forward(self, x):
+        return F.fused_rms_norm(x, self.weight, self.eps)
 
 class SoftmaxLoss(Module):
     def forward(self, logits: Tensor, y: Tensor) -> Tensor:
@@ -303,12 +371,28 @@ class SiLU(Module):
     def forward(self, x):
         return x / (F.exp(-x) + 1)
 
+class FeedFowardSwiGLU(Module):
+    """ 
+    SwiGLU: https://arxiv.org/pdf/2002.05202.pdf
+    """
+    def __init__(self, dim: int, hidden_dim: int):
+        super().__init__()
+        self.gate = Linear(dim, hidden_dim, bias=False)
+        self.down = Linear(hidden_dim, dim, bias=False)
+        self.up = Linear(dim, hidden_dim, bias=False)
+        self.act = SiLU()
+        self.dropout = Dropout(0.1)
+
+    def forward(self, x):
+        out = self.down(self.act(self.gate(x)) * self.up(x))
+        return self.dropout(out)
+
 
 class MultiheadAttention(Module):
     def __init__(self, dim=64, heads=1, device=None, dtype="float32"):
         self.dim = dim
         self.heads = heads
-        self.w_kqv = Parameter(
+        self.w_qkv = Parameter(
                 init.kaiming_uniform(self.dim, self.dim * 3),
                 device=device, dtype=dtype)
         self.w_out = Parameter(
@@ -317,9 +401,26 @@ class MultiheadAttention(Module):
         self.softmax = Softmax()
 
     def forward(self, x: Tensor) -> Tensor:
-        k, q, v = F.split(F.reshape(x @ self.w_kqv, (x.shape[0], x.shape[1], 3, self.dim)), axis=2)
-        k, q, v = [F.reshape(a, (x.shape[0], x.shape[1], self.heads, self.dim // self.heads)).transpose((1, 2)) for a in [k, q, v]]
+        q, k, v = F.split(F.reshape(x @ self.w_qkv, (x.shape[0], x.shape[1], 3, self.dim)), axis=2)
+        q, k, v = [F.reshape(a, (x.shape[0], x.shape[1], self.heads, self.dim // self.heads)).transpose((1, 2)) for a in [q, k, v]]
         mask = thanos.triu((-float("inf") * init.ones(x.shape[1], x.shape[1], device=x.device)), k=1)
         mask = F.broadcast_to(F.reshape(mask, (1, 1,) + mask.shape), (k.shape[0], k.shape[1],) + mask.shape)
-        atten = self.softmax(k @ F.transpose(q) / np.sqrt(self.dim // self.heads) + mask)
+        atten = self.softmax(q @ F.transpose(k) / np.sqrt(self.dim // self.heads) + mask)
         return F.reshape((atten @ v).transpose((1, 2)), (x.shape[0], x.shape[1], self.dim)) @ self.w_out, atten
+
+class FusedMultiheadAttention(Module):
+    def __init__(self, dim=64, heads=1, device=None, dtype="float32"):
+        self.dim = dim
+        self.heads = heads
+        self.w_qkv = Parameter(
+                init.kaiming_uniform(self.dim, self.dim * 3),
+                device=device, dtype=dtype)
+        self.w_out = Parameter(
+                init.kaiming_uniform(self.dim, self.dim),
+                device=device, dtype=dtype)
+        self.softmax = Softmax()
+
+    def forward(self, x: Tensor) -> Tensor:
+        q, k, v = F.split(F.reshape(x @ self.w_qkv, (x.shape[0], x.shape[1], 3, self.dim)), axis=2)
+        q, k, v = [F.reshape(a, (x.shape[0], x.shape[1], self.heads, self.dim // self.heads)).transpose((1, 2)) for a in [q, k, v]]
+        return F.reshape(F.fused_attention(q, k, v).transpose((1, 2)), (x.shape[0], x.shape[1], self.dim)) @ self.w_out, None

@@ -103,8 +103,8 @@ class DataLoader:
         self.batch_size = batch_size
         self.device = device
         if not self.shuffle:
-            self.ordering = np.array_split(np.arange(len(dataset)), 
-                                           range(batch_size, len(dataset), batch_size))
+            self.ordering = np.array_split(
+                    np.arange(len(dataset)), range(batch_size, len(dataset), batch_size))
 
     def __iter__(self):
         self.idx = 0

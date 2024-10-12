@@ -64,8 +64,11 @@ class NDArray:
         elif isinstance(data, NDArray):
             self.data = data.data
             self._device = data.device
-        else:
+        elif isinstance(data, torch.Tensor):
             self.data = data
+            self._device = device
+        else:
+            self.data = torch.from_numpy(np.array(data))
             self._device = device
 
     @staticmethod

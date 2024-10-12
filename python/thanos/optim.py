@@ -20,6 +20,19 @@ class Optimizer:
         for p in self.params:
             p.grad = None
 
+    def state_dict(self):
+        state_dict = {}
+        for name in self.__dict__:
+            value = self.__dict__[name]
+            if name != "params":
+                state_dict[name] = value
+        return state_dict
+
+    def load_state_dict(self, state_dict):
+        for name, value in self.__dict__.items():
+            if name in state_dict:
+                value = state_dict[name]
+
 class SGD(Optimizer):
     def __init__(self, params, lr=0.01, momentum=0.0, weight_decay=0.0):
         super().__init__(params)
@@ -27,7 +40,6 @@ class SGD(Optimizer):
         self.momentum = momentum
         self.u = {}
         self.weight_decay = weight_decay
-
     
     def step(self):
         for idx, p in enumerate(self.params):
@@ -86,7 +98,6 @@ class AdamW(Optimizer):
         self.t += 1
         for theta_id, theta in enumerate(self.params):
             grad = theta.grad.detach()
-
             if theta_id not in self.m:
                 m_cur = (1 - self.beta1) * grad
             else:

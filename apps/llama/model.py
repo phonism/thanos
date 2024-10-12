@@ -1,5 +1,6 @@
 import sys
 sys.path.append('../../python')
+import time
 import thanos
 from thanos import nn, init
 import thanos.nn.functional as F
@@ -40,7 +41,7 @@ class TransformerBlock(nn.Module):
 
 class Transformer(nn.Module):
 
-    def __init__(self, vocab_size, n_embd=64, block_size=32, n_layer=4, n_head=4):
+    def __init__(self, vocab_size, n_embd=896, block_size=32, n_layer=24, n_head=14):
         super(Transformer, self).__init__()
         self.vocab_size = vocab_size
         self.n_embd = n_embd
@@ -89,7 +90,7 @@ encode = lambda s: [stoi[c] for c in s] # encoder: take a string, output a list 
 decode = lambda l: ''.join([itos[i] for i in l]) # decoder: take a list of integers, output a string
 
 data = thanos.Tensor(encode(text), device=thanos.cuda())
-n = int(0.9*len(data)) # first 90% will be train, rest val
+n = int(0.9 * len(data)) # first 90% will be train, rest val
 train_data = data[:n]
 val_data = data[n:]
 
@@ -108,15 +109,15 @@ model = Transformer(vocab_size=vocab_size)
 model.cuda()
 optimizer = thanos.optim.Adam(model.parameters(), lr=0.001)
 
+start_time = time.time()
 for iter in range(10000):
     xb, yb = get_batch('train')
 
     # evaluate the loss
     logits, loss = model(xb, yb)
     if iter % 100 == 0:
-        print("step:", iter, " loss:", loss.detach().numpy())
-    context = thanos.init.zeros(1, 1)
+        print("step:", iter, " loss:", loss.detach().numpy(), " time:", time.time() - start_time)
+        start_time = time.time()
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-

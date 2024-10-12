@@ -1,7 +1,10 @@
 import sys
 sys.path.append('../../python')
+import json
 import thanos
 from thanos import nn, init
+from thanos.amp import autocast
+from thanos.utils import profile
 import time
 import thanos.nn.functional as F
 import torch
@@ -46,13 +49,11 @@ class TransformerBlock(nn.Module):
     def __init__(self, n_embed, n_head):
         super(TransformerBlock, self).__init__()
         head_size = n_embed // n_head
-        self.sa = nn.MultiheadAttention(n_embed, n_head)
+        self.sa = nn.FusedMultiheadAttention(n_embed, n_head)
+        #self.sa = nn.MultiheadAttention(n_embed, n_head)
         self.ffwd = FeedFowardSwiGLU(n_embed, 4 * n_embed)
-        #self.ffwd = FeedFoward(n_embed, 4 * n_embed)
-        #self.ln1 = nn.LayerNorm(n_embed)
-        self.ln1 = nn.RMSNorm(n_embed)
-        #self.ln2 = nn.LayerNorm(n_embed)
-        self.ln2 = nn.RMSNorm(n_embed)
+        self.ln1 = nn.FusedRMSNorm(n_embed)
+        self.ln2 = nn.FusedRMSNorm(n_embed)
 
     def forward(self, x):
         lx = self.ln1(x)
@@ -65,7 +66,7 @@ class Transformer(nn.Module):
     """
     transformer
     """
-    def __init__(self, vocab_size, n_embed=64, block_size=32, n_layer=4, n_head=4):
+    def __init__(self, vocab_size, n_embed=64, block_size=32, n_layer=24, n_head=16):
         super().__init__()
         self.vocab_size = vocab_size
         self.n_embed = n_embed
@@ -78,7 +79,9 @@ class Transformer(nn.Module):
         #self.rotary_emb = nn.RotaryEmbedding(n_embed, block_size)
         self.blocks = nn.Sequential(*[TransformerBlock(n_embed, n_head=n_head) for _ in range(n_layer)])
         #self.ln_f = nn.LayerNorm(n_embed) # final layer norm
-        self.ln_f = nn.RMSNorm(n_embed) # final layer norm
+        #self.ln_f = nn.FusedLayerNorm(n_embed) # final layer norm
+        #self.ln_f = nn.RMSNorm(n_embed) # final layer norm
+        self.ln_f = nn.FusedRMSNorm(n_embed) # final layer norm
         self.lm_head = nn.Linear(n_embed, vocab_size)
 
     def forward(self, idx, targets=None):
@@ -94,65 +97,79 @@ class Transformer(nn.Module):
         x = self.ln_f(x) # (B,T,C)
         logits = self.lm_head(x) # (B,T,vocab_size)
 
+        # TODO 似乎这里反向传播有问题?
         if targets is None:
-            loss = None
-        else:
-            B, T, C = logits.shape
-            logits = F.reshape(logits, (B*T, C))
-            targets = F.reshape(targets, (B*T,))
-            loss = nn.SoftmaxLoss()(logits, targets)
+            targets = idx[:, 1:]  # 将idx错位一个
+            logits = logits[:, :-1, :]  # 对应地调整logits
+
+        B, T, C = logits.shape
+        logits = F.reshape(logits, (B*T, C))
+        targets = F.reshape(targets, (B*T,))
+        loss = nn.SoftmaxLoss()(logits, targets)
 
         return logits, loss
 
-with open('input.txt', 'r', encoding='utf-8') as f:
-    text = f.read()
+vocab_size = 151936
+block_size = 1024
 
-chars = sorted(list(set(text)))
-vocab_size = len(chars)
-# create a mapping from characters to integers
-stoi = {ch:i for i,ch in enumerate(chars)}
-itos = {i:ch for i,ch in enumerate(chars)}
-encode = lambda s: [stoi[c] for c in s] # encoder: take a string, output a list of integers
-decode = lambda l: ''.join([itos[i] for i in l]) # decoder: take a list of integers, output a string
-
-data = thanos.Tensor(encode(text), device=thanos.cuda())
-n = int(0.9*len(data)) # first 90% will be train, rest val
-train_data = data[:n]
-val_data = data[n:]
-
-block_size = 32
-batch_size = 16
-
-def get_batch(split):
-    # generate a small batch of data of inputs x and targets y
-    data = train_data if split == 'train' else val_data
-    ix = torch.randint(len(data) - block_size, (batch_size,))
-    x = F.stack([data[i:i+block_size] for i in ix])
-    y = F.stack([data[i+1:i+block_size+1] for i in ix])
-    return x, y
-
-model = Transformer(vocab_size=vocab_size, n_embed=512)
+model = Transformer(vocab_size=vocab_size, n_embed=64 * 16, block_size=block_size)
 model.cuda()
-optimizer = thanos.optim.AdamW(model.parameters(), lr=0.001)
+optimizer = thanos.optim.AdamW(model.parameters(), lr=0.0001)
 
 print("num_parameters:", model.num_parameters())
 
+
+
+batch_size = 2
+
+def get_batch(bs):
+    x = []
+    y = []
+    with open("../../../datasets/train_data") as f:
+        for line in f:
+            js = json.loads(line)
+            x.append(js["input_ids"][:1024])
+            y.append(js["input_ids"][1:1025])
+            if len(x) == batch_size:
+                xx = thanos.Tensor(np.array(x), device=thanos.cuda())
+                yy = thanos.Tensor(np.array(y), device=thanos.cuda())
+                x = []
+                y = []
+                yield xx, yy
+
 start_time = time.time()
-total_loss = 0
-total_cnt = 0
+total_cnt = 1
+batch_loss = 0
+batch_cnt = 0
 
-for iter in range(100):
-    xb, yb = get_batch('train')
+#model_state_dict, optimizer_state_dict = thanos.load_checkpoint("checkpoints/checkpoint.bin")
+#model.load_state_dict(model_state_dict)
+#optimizer.load_state_dict(optimizer_state_dict)
+print("load done")
 
-    # evaluate the loss
-    logits, loss = model(xb, yb)
-    total_loss += loss.detach().numpy()
-    total_cnt += 1
-    if iter % 100 == 0:
-        print("step:", iter, " loss:", total_loss / total_cnt, " time:", time.time() - start_time)
-        total_loss = 0
-        total_cnt = 0
-        start_time = time.time()
-    optimizer.zero_grad()
+accumulation_steps = 64
+for idx, data in enumerate(get_batch(batch_size)):
+    x = data[0]
+    y = data[1]
+    with autocast():
+        logits, loss = model(x, y)
+    loss = loss / accumulation_steps
     loss.backward()
+        
+    batch_loss += loss.detach().numpy()
+    batch_cnt += 1
+    if (total_cnt + 1) % accumulation_steps == 0:
+        optimizer.step()
+        optimizer.zero_grad()
+        print("step:", total_cnt, " loss:", batch_loss, " time:", time.time() - start_time)
+        batch_loss = 0
+        batch_cnt = 0
+        start_time = time.time()
+    if total_cnt % 2000 == 0:
+        thanos.save_checkpoint(model.state_dict(), optimizer.state_dict(), "~/workspace/luqi03/checkpoints/checkpoint.bin")
+        print("save done!")
+    total_cnt += 1
+
+if (total_cnt + 1) % accumulation_steps != 0:
     optimizer.step()
+    optimizer.zero_grad()
